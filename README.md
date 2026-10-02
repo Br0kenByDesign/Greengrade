@@ -10,6 +10,9 @@ greengrade ist eine Web-App (PWA) für Erwachsene, die festhalten wollen, wie ih
 
 Die Oberfläche ist auf Deutsch.
 
+<img width="600" height="350" alt="image" src="https://github.com/user-attachments/assets/2d828252-ef33-44c9-a595-4d8264ddcec0" />
+
+
 ## Funktionen
 
 **Logbuch**
@@ -32,6 +35,9 @@ Die Oberfläche ist auf Deutsch.
 - Zwei Sorten nebeneinander vergleichen
 - Vergleich der eigenen Noten mit dem Community-Durchschnitt
 
+<img width="600" height="350" alt="image" src="https://github.com/user-attachments/assets/80003fd7-6341-451c-ba3f-03ac6003fabe" />
+
+
 **Öffentliche Bewertungen**
 - Pro Eintrag wählbar: Bewertung öffentlich teilen, optional mit Kommentar und Foto
 - Öffentlich sichtbar sind nur Noten, Kommentar, Foto und der Monat - nie Name, Herkunft oder Konsumdetails
@@ -39,6 +45,8 @@ Die Oberfläche ist auf Deutsch.
 - Sortenvorschläge beim Tippen, damit Bewertungen derselben Sorte zusammenfinden
 - Rangliste mit gewichtetem Durchschnitt (eine einzelne 10/10 landet nicht sofort oben)
 - Für Sorten ohne Foto wird automatisch eine eigene Illustration erzeugt
+ <img width="600" height="450" alt="Bildschirmfoto vom 2026-10-02 22-42-12" src="https://github.com/user-attachments/assets/b04b30c9-a0d9-44bb-9d10-3c453816d109" />
+
 
 **Moderation**
 - Kommentare und Fotos melden
