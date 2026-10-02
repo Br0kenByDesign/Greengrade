@@ -1,0 +1,75 @@
+# greengrade: app (API + web app), db (Postgres), landing (static page).
+# Put any reverse proxy with TLS in front: app -> e.g. app.example.com, landing -> e.g. example.com.
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: greengrade
+      POSTGRES_USER: greengrade
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD fehlt in .env}
+    volumes:
+      - db:/var/lib/postgresql/data
+    networks: [internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U greengrade -d greengrade"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    shm_size: 128mb
+    security_opt: ["no-new-privileges:true"]
+
+  app:
+    build:
+      context: .
+      dockerfile: app/Dockerfile
+    image: greengrade-app:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://greengrade:${POSTGRES_PASSWORD}@db:5432/greengrade?sslmode=disable
+      DATA_DIR: /data
+      LISTEN_ADDR: ":8080"
+    volumes:
+      - photos:/data
+      - ./secrets:/run/secrets:ro   # optional, e.g. Microsoft Graph certificate
+    networks: [internal, proxy]
+    # Without a dockerized reverse proxy: remove "proxy" above and publish the port locally instead
+    # ports: ["127.0.0.1:8080:8080"]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 512m
+    pids_limit: 200
+
+  landing:
+    build:
+      context: .
+      dockerfile: landing/Dockerfile
+      args:
+        APP_URL: ${APP_ORIGIN:?APP_ORIGIN fehlt in .env}
+    image: greengrade-landing:latest
+    restart: unless-stopped
+    networks: [proxy]
+    # ports: ["127.0.0.1:8081:8080"]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 64m
+
+networks:
+  internal:
+    internal: true          # database is never reachable from outside
+  proxy:
+    external: true
+    name: ${PROXY_NETWORK:-proxy}   # docker network your reverse proxy is attached to
+
+volumes:
+  db:
+  photos:

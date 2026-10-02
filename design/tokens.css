@@ -1,0 +1,21 @@
+/* greengrade design tokens - shared by app and landing page */
+:root{
+  --bg:#FFFFFF; --surface:#F4F6F2; --ink:#18211B; --muted:#626C64; --line:#E3E7E1;
+  --leaf:#2E5B3B; --leaf-ink:#FFFFFF; --leaf-soft:#E5EEE6;
+  --resin:#A8771A; --resin-soft:#F6EDD8; --danger:#A3352B; --danger-soft:#F8E7E4;
+  --display:"Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  --body:"Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#111512; --surface:#1A201B; --ink:#ECF1EA; --muted:#97A299; --line:#28302A;
+    --leaf:#86BC93; --leaf-ink:#0F1A12; --leaf-soft:#1E2C22; --resin:#E2B05A; --resin-soft:#2C2516;
+    --danger:#E58A80; --danger-soft:#2E1C1A;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#111512; --surface:#1A201B; --ink:#ECF1EA; --muted:#97A299; --line:#28302A;
+  --leaf:#86BC93; --leaf-ink:#0F1A12; --leaf-soft:#1E2C22; --resin:#E2B05A; --resin-soft:#2C2516;
+  --danger:#E58A80; --danger-soft:#2E1C1A;
+}

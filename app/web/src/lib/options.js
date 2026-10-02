@@ -1,0 +1,15 @@
+export const AROMAS = ['Zitrus', 'Kiefer', 'Erdig', 'Süß', 'Diesel', 'Würzig', 'Beerig', 'Kräuter', 'Käse', 'Blumig', 'Holzig', 'Tropisch', 'Minze', 'Skunk'];
+export const FLAVORS = ['Zitrus', 'Kiefer', 'Erdig', 'Pfeffer', 'Süß', 'Kräuter', 'Holzig', 'Beerig', 'Diesel', 'Nussig', 'Cremig'];
+export const EFFECTS = ['Entspannt', 'Euphorisch', 'Fokussiert', 'Kreativ', 'Schläfrig', 'Hungrig', 'Gesprächig', 'Energiegeladen', 'Schmerzlindernd', 'Körperlich'];
+export const SIDE_EFFECTS = ['Trockener Mund', 'Rote Augen', 'Unruhe', 'Kopfschmerz', 'Schwindel', 'Müdigkeit', 'Herzrasen'];
+export const TERPENES = ['Myrcen', 'Limonen', 'Caryophyllen', 'Linalool', 'Pinen', 'Terpinolen', 'Humulen', 'Ocimen', 'Bisabolol'];
+export const DAYTIME = ['Morgens', 'Tagsüber', 'Abends', 'Nachts'];
+export const METHODS = ['Vaporizer', 'Inhalator', 'Oral (Öl, Tropfen)', 'Edible', 'Joint', 'Pfeife', 'Bong', 'Sonstiges'];
+export const TRICHOMES = ['Wenig', 'Mittel', 'Dicht', 'Sehr dicht'];
+export const DENSITY = ['Locker', 'Mittel', 'Fest'];
+export const TRIM = ['Grob', 'Ordentlich', 'Sehr sauber'];
+export const MOISTURE = ['Zu trocken', 'Gut', 'Zu feucht'];
+export const SEEDS = ['Feminisiert', 'Autoflower', 'Regulär', 'Steckling'];
+export const ENVIRONMENTS = ['Indoor', 'Outdoor', 'Gewächshaus'];
+export const MEDIA = ['Erde', 'Coco', 'Hydro', 'Living Soil'];
+export const REPORT_REASONS = [['sale', 'Verkaufs- oder Tauschangebot'], ['personal', 'Persönliche Daten zu sehen'], ['abuse', 'Beleidigend oder hetzerisch'], ['spam', 'Spam oder Werbung'], ['other', 'Etwas anderes']];

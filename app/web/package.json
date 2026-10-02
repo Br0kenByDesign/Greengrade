@@ -1,0 +1,17 @@
+{
+  "name": "greengrade-web",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "design": "node scripts/copy-design.mjs",
+    "dev": "npm run design && vite",
+    "build": "npm run design && vite build"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "svelte": "^5.46.4",
+    "vite": "^8.3.2",
+    "vite-plugin-pwa": "^1.3.0"
+  }
+}
