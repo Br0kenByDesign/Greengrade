@@ -10,7 +10,7 @@ greengrade ist eine Web-App (PWA) für Erwachsene, die festhalten wollen, wie ih
 
 Die Oberfläche ist auf Deutsch.
 
- <img width="600" height="350" alt="Bildschirmfoto vom 2026-10-02 22-42-12" src="https://github.com/user-attachments/assets/b04b30c9-a0d9-44bb-9d10-3c453816d109" />
+ <img width="500" height="500" alt="Bildschirmfoto vom 2026-10-02 22-42-12" src="https://github.com/user-attachments/assets/b04b30c9-a0d9-44bb-9d10-3c453816d109" />
 
 
 ## Funktionen
