@@ -62,6 +62,9 @@ Die Oberfläche ist auf Deutsch.
 **Landingpage**
 - Statische Seite zur Erklärung der App, mit Vorlagen für Impressum und Datenschutz
 
+<img width="600" height="360" alt="Bildschirmfoto vom 2026-10-02 23-06-16" src="https://github.com/user-attachments/assets/e11ee649-3746-4de3-bca3-44d6652ff6bf" />
+
+
 ## Datenschutz und Sicherheit
 
 - **Keine Passwörter, keine Sessions in der Datenbank.** Zugang über kurzlebige, Ed25519-signierte JWTs in `__Host-`-Cookies (`HttpOnly`, `Secure`, `SameSite=Lax`). Access-Token 15 Minuten, Refresh-Token 30 Tage.
