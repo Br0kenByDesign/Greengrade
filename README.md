@@ -10,9 +10,6 @@ greengrade ist eine Web-App (PWA) für Erwachsene, die festhalten wollen, wie ih
 
 Die Oberfläche ist auf Deutsch.
 
- <img width="500" height="500" alt="Bildschirmfoto vom 2026-10-02 22-42-12" src="https://github.com/user-attachments/assets/b04b30c9-a0d9-44bb-9d10-3c453816d109" />
-
-
 ## Funktionen
 
 **Logbuch**
@@ -35,8 +32,6 @@ Die Oberfläche ist auf Deutsch.
 - Zwei Sorten nebeneinander vergleichen
 - Vergleich der eigenen Noten mit dem Community-Durchschnitt
 
-<img width="600" height="350" alt="image" src="https://github.com/user-attachments/assets/80003fd7-6341-451c-ba3f-03ac6003fabe" />
-
 
 **Öffentliche Bewertungen**
 - Pro Eintrag wählbar: Bewertung öffentlich teilen, optional mit Kommentar und Foto
@@ -45,8 +40,6 @@ Die Oberfläche ist auf Deutsch.
 - Sortenvorschläge beim Tippen, damit Bewertungen derselben Sorte zusammenfinden
 - Rangliste mit gewichtetem Durchschnitt (eine einzelne 10/10 landet nicht sofort oben)
 - Für Sorten ohne Foto wird automatisch eine eigene Illustration erzeugt
-
-<img width="600" height="350" alt="image" src="https://github.com/user-attachments/assets/2d828252-ef33-44c9-a595-4d8264ddcec0" />
 
 **Moderation**
 - Kommentare und Fotos melden
@@ -61,8 +54,6 @@ Die Oberfläche ist auf Deutsch.
 
 **Landingpage**
 - Statische Seite zur Erklärung der App, mit Vorlagen für Impressum und Datenschutz
-
-<img width="600" height="360" alt="Bildschirmfoto vom 2026-10-02 23-06-16" src="https://github.com/user-attachments/assets/e11ee649-3746-4de3-bca3-44d6652ff6bf" />
 
 
 ## Datenschutz und Sicherheit
@@ -289,10 +280,6 @@ app/
   web/                  Svelte-5-PWA, wird nach webui/dist gebaut und eingebettet
 landing/                Statische Landingpage und nginx-Konfiguration
 ```
-
-## Sicherheitslücken
-
-Bitte nicht als Issue, sondern privat melden - siehe [SECURITY.md](SECURITY.md).
 
 ## Hinweis
 
