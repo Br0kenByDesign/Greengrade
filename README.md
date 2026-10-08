@@ -3,6 +3,11 @@
 <h1 align="center">greengrade</h1>
 
 <p align="center">Ein privates Logbuch zum Bewerten von Cannabis aus Apotheke und eigenem Grow.<br>Selbst gehostet, ohne Passwörter, mit optionalen anonymen öffentlichen Bewertungen.</p>
+<p align="center">
+  <a href="https://greengrade.cloud">greengrade.cloud</a><br>
+  <a href="https://app.greengrade.cloud"">app.greengrade.cloud</a><br>
+  <a href="https://status.greengrade.cloud"">status.greengrade.cloud</a>
+</p>
 
 ---
 
