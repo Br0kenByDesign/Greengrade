@@ -1,0 +1,77 @@
+# Gatus status page for greengrade.
+# ${APP_ORIGIN}, ${LANDING_URL} and ${STATUS_URL} come from .env (docker-compose passes them in).
+
+storage:
+  type: sqlite
+  path: /data/data.db
+  maximum-number-of-results: 100
+  maximum-number-of-events: 50
+
+ui:
+  title: "Status - greengrade"
+  description: "Erreichbarkeit von greengrade"
+  header: "greengrade"
+  dashboard-heading: "Systemstatus"
+  dashboard-subheading: "App und Website werden jede Minute geprüft."
+  logo: "${LANDING_URL}/design/favicon.svg"   # adapts to light and dark mode
+  link: "${LANDING_URL}"
+  favicon:
+    default: "${LANDING_URL}/design/icons/favicon-48.png"
+    size16x16: "${LANDING_URL}/design/icons/favicon-48.png"
+    size32x32: "${LANDING_URL}/design/icons/favicon-48.png"
+  dark-mode: false
+  default-sort-by: name
+  buttons:
+    - name: "App öffnen"
+      link: "${APP_ORIGIN}"
+    - name: "Website"
+      link: "${LANDING_URL}"
+  custom-css: |
+    @import url("${LANDING_URL}/design/fonts.css");
+    @import url("${LANDING_URL}/design/status.css");
+
+endpoints:
+  # Direct check inside the Docker network: server and database.
+  # /healthz is not reachable through the reverse proxy.
+  - name: "App (Server und Datenbank)"
+    url: "http://app:8080/healthz"
+    interval: 1m
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY] == ok"
+    ui:
+      hide-hostname: true
+      hide-url: true
+      hide-conditions: true
+
+
+  - name: "App"
+    url: "${APP_ORIGIN}/"
+    interval: 1m
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 2000"
+      - "[CERTIFICATE_EXPIRATION] > 336h"   # warn 14 days before the TLS certificate expires
+    ui:
+      hide-conditions: true
+
+  - name: "Website"
+    url: "${LANDING_URL}/"
+    interval: 1m
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 2000"
+      - "[CERTIFICATE_EXPIRATION] > 336h"
+    ui:
+      hide-conditions: true
+
+# Optional: notifications when something fails, e.g. via ntfy, Telegram, Discord or e-mail.
+# See https://github.com/TwiN/gatus#alerting - then add "alerts: [{type: ntfy}]" to the endpoints.
+# alerting:
+#   ntfy:
+#     topic: "greengrade-status-<random>"
+#     url: "https://ntfy.sh"
+#     default-alert:
+#       failure-threshold: 3
+#       success-threshold: 2
+#       send-on-resolved: true

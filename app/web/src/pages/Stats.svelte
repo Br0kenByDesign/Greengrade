@@ -1,6 +1,6 @@
 <script>
   import { api } from '../lib/api.js';
-  import { score, num, month, CATS } from '../lib/format.js';
+  import { score, num, plural, MONTHS_SHORT, CATS } from '../lib/format.js';
   import Bars from '../components/Bars.svelte';
   let s = $state(null), err = $state('');
   api('/api/stats').then(x => (s = x)).catch(e => (err = e.message));
@@ -20,12 +20,19 @@
     <div class="stat"><b>{s.avgPrice != null ? num(s.avgPrice, 2) + ' €' : '-'}</b><span>Ø Apothekenpreis</span></div>
   </div>
   <div class="sgrid">
-    {#if s.monthly.length > 1}
+    {#if s.monthly.length}
+      {@const mx = Math.max(1, ...s.monthly.map(x => x.count))}
       <div class="panel" style="grid-column:1/-1">
         <h2>Verkostungen pro Monat</h2>
-        <div class="monthbars">
-          {#each s.monthly as m}{@const mx = Math.max(...s.monthly.map(x => x.count))}
-            <div title="{m.count} Sorten, Ø {score(m.avg)}"><b style="color:var(--ink);font-weight:500">{m.count}</b><span style="height:{m.count / mx * 100}%"></span>{month(m.month).split(' ')[0]}</div>
+        <div class="monthbars" role="img" aria-label="Verkostungen pro Monat, letzte 12 Monate">
+          {#each s.monthly as m, i}
+            {@const [y, mo] = m.month.split('-')}
+            {@const yearMark = i === 0 || mo === '01'}
+            <div class:year={yearMark && i > 0} title="{MONTHS_SHORT[+mo - 1]} {y}: {plural(m.count, 'Verkostung', 'Verkostungen')}{m.avg != null ? `, Ø ${score(m.avg)}` : ''}">
+              <b style="color:var(--ink);font-weight:500">{m.count || ''}</b>
+              <span class:zero={!m.count} style="height:{m.count / mx * 100}%"></span>
+              <small>{MONTHS_SHORT[+mo - 1].replace('.', '')}{#if yearMark}<em>{y}</em>{/if}</small>
+            </div>
           {/each}
         </div>
       </div>
@@ -44,7 +51,7 @@
     </div>
     {#if s.community.strains}<div class="panel"><h2>Du und die Community</h2>
       <div class="versus"><div><b>{score(s.community.mine)}</b><span>Deine Ø-Note</span></div><div><b>{score(s.community.theirs)}</b><span>Ø der anderen</span></div></div>
-      <p class="muted" style="font-size:13px;margin-top:10px">Über {s.community.strains} gemeinsam bewertete Sorten.</p></div>{/if}
+      <p class="muted" style="font-size:13px;margin-top:10px">Über {plural(s.community.strains, 'gemeinsam bewertete Sorte', 'gemeinsam bewertete Sorten')}.</p></div>{/if}
     {#each [['Aromen', s.aromas], ['Geschmack', s.flavors], ['Wirkungen', s.effects], ['Terpene', s.terpenes], ['Nebenwirkungen', s.sideEffects], ['Konsum', s.methods]] as [title, list]}
       {#if list.length}<div class="panel"><h2>{title}</h2><Bars items={tagBars(list)} /></div>{/if}
     {/each}

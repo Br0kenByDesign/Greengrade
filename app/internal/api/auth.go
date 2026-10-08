@@ -2,8 +2,11 @@ package api
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
+	"fmt"
 	"html"
 	"log/slog"
 	"net/http"
@@ -81,13 +84,13 @@ func (s *Server) handleMagicRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	eh := s.emails.Hash(email)
 	ehHex := hex.EncodeToString(eh)
-	ip := s.ips.ClientIP(r)
+	ip := s.ips.LimitKey(r)
 	for _, l := range []struct {
 		key    string
 		limit  int
 		window time.Duration
 	}{
-		{"magic-ip:" + ip, 10, time.Hour},
+		{"magic-ip:" + ip, 5, time.Hour},
 		{"magic-mail:" + ehHex, 3, 15 * time.Minute},
 		{"magic-mail-day:" + ehHex, 10, 24 * time.Hour},
 	} {
@@ -101,20 +104,32 @@ func (s *Server) handleMagicRequest(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	tok, err := s.tokens.Sign(security.Claims{Typ: security.TypMagic, EmailHash: ehHex}, 10*time.Minute)
+	id := security.RandomID(16)
+	exp := time.Now().Add(10 * time.Minute)
+	tok, err := s.tokens.Sign(security.Claims{Typ: security.TypMagic, EmailHash: ehHex, RegisteredClaims: jwt.RegisteredClaims{ID: id}}, 10*time.Minute)
 	if err != nil {
 		internal(w, err)
 		return
 	}
+	code := security.NewLoginCode()
+	if _, err := s.db.Exec(ctx, `INSERT INTO login_codes(id, email_hmac, code_hash, expires_at) VALUES ($1,$2,$3,$4)`,
+		id, eh, s.codeHash(id, code), exp); err != nil {
+		internal(w, err)
+		return
+	}
+	shown := security.FormatLoginCode(code)
 	link := s.cfg.AppOrigin + "/auth/verify#" + tok
 	msg := mail.Message{
 		To:      email,
 		Subject: "Dein Anmeldelink für greengrade",
 		Text: "Hallo,\n\nmit diesem Link meldest du dich bei greengrade an. Er ist 10 Minuten gültig und funktioniert nur einmal:\n\n" +
-			link + "\n\nFalls du keinen Link angefordert hast, kannst du diese Mail einfach ignorieren.\n\ngreengrade",
+			link + "\n\nOder gib diesen Code auf dem Gerät ein, auf dem du die Anmeldung gestartet hast: " + shown +
+			"\n\nFalls du keinen Link angefordert hast, kannst du diese Mail einfach ignorieren.\n\ngreengrade",
 		HTML: `<div style="font-family:system-ui,sans-serif;font-size:15px;line-height:1.5;color:#18211B;max-width:520px">` +
 			`<p>Hallo,</p><p>mit diesem Link meldest du dich bei greengrade an. Er ist 10 Minuten gültig und funktioniert nur einmal.</p>` +
 			`<p style="margin:28px 0"><a href="` + html.EscapeString(link) + `" style="background:#2E5B3B;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:600">Bei greengrade anmelden</a></p>` +
+			`<p>Oder gib diesen Code auf dem Gerät ein, auf dem du die Anmeldung gestartet hast - zum Beispiel in der App auf deinem Homescreen:</p>` +
+			`<p style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:26px;font-weight:700;letter-spacing:4px;margin:8px 0 24px">` + shown + `</p>` +
 			`<p style="color:#626C64;font-size:13px">Falls du keinen Link angefordert hast, kannst du diese Mail einfach ignorieren.</p></div>`,
 	}
 	sendCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 25*time.Second)
@@ -124,7 +139,61 @@ func (s *Server) handleMagicRequest(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadGateway, "Die Mail konnte gerade nicht verschickt werden. Bitte versuche es später erneut.")
 		return
 	}
+	// The code only works together with this cookie, i.e. on the device that requested it.
+	s.setCookie(w, cookieLoginCode, id, 10*time.Minute)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) codeHash(id, code string) []byte {
+	m := hmac.New(sha256.New, security.Derive(s.cfg.AppSecret, "login-code"))
+	m.Write([]byte(id + ":" + code))
+	return m.Sum(nil)
+}
+
+func (s *Server) handleCodeVerify(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Code string `json:"code"`
+	}
+	if !readJSON(w, r, &in) {
+		return
+	}
+	ck, err := r.Cookie(cookieLoginCode)
+	if err != nil {
+		fail(w, http.StatusBadRequest, "Fordere den Code bitte auf diesem Gerät an.")
+		return
+	}
+	ctx := r.Context()
+	var eh, want []byte
+	var attempts int
+	err = s.db.QueryRow(ctx, `UPDATE login_codes SET attempts = attempts + 1
+		WHERE id=$1 AND expires_at > now() AND attempts < 5 RETURNING email_hmac, code_hash, attempts`, ck.Value).Scan(&eh, &want, &attempts)
+	if err != nil {
+		s.clearCookie(w, cookieLoginCode)
+		fail(w, http.StatusBadRequest, "Der Code ist abgelaufen, wurde schon verwendet oder zu oft falsch eingegeben. Fordere einfach einen neuen an.")
+		return
+	}
+	if !hmac.Equal(s.codeHash(ck.Value, security.NormalizeLoginCode(in.Code)), want) {
+		left := 5 - attempts
+		if left <= 0 {
+			s.db.Exec(ctx, `DELETE FROM login_codes WHERE id=$1`, ck.Value)
+			s.clearCookie(w, cookieLoginCode)
+			fail(w, http.StatusBadRequest, "Der Code war zu oft falsch. Fordere einfach einen neuen an.")
+			return
+		}
+		fail(w, http.StatusBadRequest, fmt.Sprintf("Der Code stimmt nicht. Noch %d Versuch%s.", left, map[bool]string{true: "", false: "e"}[left == 1]))
+		return
+	}
+	s.db.Exec(ctx, `DELETE FROM login_codes WHERE id=$1`, ck.Value)
+	s.clearCookie(w, cookieLoginCode)
+	// link and code belong together: whichever is used first invalidates the other
+	if ok, err := s.markUsed(ctx, "magic:"+ck.Value, time.Now().Add(15*time.Minute)); err != nil {
+		internal(w, err)
+		return
+	} else if !ok {
+		fail(w, http.StatusBadRequest, "Diese Anmeldung wurde schon über den Link abgeschlossen.")
+		return
+	}
+	s.finishEmailLogin(w, ctx, eh)
 }
 
 func (s *Server) handleMagicVerify(w http.ResponseWriter, r *http.Request) {
@@ -147,13 +216,19 @@ func (s *Server) handleMagicVerify(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadRequest, "Dieser Link wurde schon verwendet. Fordere einfach einen neuen an.")
 		return
 	}
+	s.db.Exec(ctx, `DELETE FROM login_codes WHERE id=$1`, c.ID)
 	eh, err := hex.DecodeString(c.EmailHash)
 	if err != nil {
 		fail(w, http.StatusBadRequest, "Der Link ist ungültig.")
 		return
 	}
+	s.finishEmailLogin(w, ctx, eh)
+}
+
+// finishEmailLogin signs in an existing account or hands out a signup token.
+func (s *Server) finishEmailLogin(w http.ResponseWriter, ctx context.Context, eh []byte) {
 	var uid string
-	err = s.db.QueryRow(ctx, `UPDATE users SET is_admin=$2 WHERE email_hmac=$1 RETURNING id`, eh, s.admins[string(eh)]).Scan(&uid)
+	err := s.db.QueryRow(ctx, `UPDATE users SET is_admin=$2 WHERE email_hmac=$1 RETURNING id`, eh, s.admins[string(eh)]).Scan(&uid)
 	if err == nil {
 		if err := s.startSession(w, uid); err != nil {
 			internal(w, err)
@@ -166,7 +241,7 @@ func (s *Server) handleMagicVerify(w http.ResponseWriter, r *http.Request) {
 		internal(w, err)
 		return
 	}
-	st, err := s.tokens.Sign(security.Claims{Typ: security.TypSignup, EmailHash: c.EmailHash}, 30*time.Minute)
+	st, err := s.tokens.Sign(security.Claims{Typ: security.TypSignup, EmailHash: hex.EncodeToString(eh)}, 30*time.Minute)
 	if err != nil {
 		internal(w, err)
 		return

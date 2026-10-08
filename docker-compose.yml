@@ -53,6 +53,7 @@ services:
       dockerfile: landing/Dockerfile
       args:
         APP_URL: ${APP_ORIGIN:?APP_ORIGIN fehlt in .env}
+        STATUS_URL: ${STATUS_URL:-}
     image: greengrade-landing:latest
     restart: unless-stopped
     networks: [proxy]
@@ -62,6 +63,27 @@ services:
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     mem_limit: 64m
+
+  # Optional status page (Gatus). Enable with COMPOSE_PROFILES=status in .env.
+  status:
+    profiles: [status]
+    build:
+      context: .
+      dockerfile: gatus/Dockerfile
+    image: greengrade-status:latest
+    restart: unless-stopped
+    environment:
+      APP_ORIGIN: ${APP_ORIGIN}
+      LANDING_URL: ${LANDING_URL:?LANDING_URL fehlt in .env}
+    volumes:
+      - status:/data
+    networks: [proxy]       # reaches app:8080 and landing:8080 directly, and the public URLs
+    # ports: ["127.0.0.1:8082:8080"]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 128m
 
 networks:
   internal:
@@ -73,3 +95,4 @@ networks:
 volumes:
   db:
   photos:
+  status:

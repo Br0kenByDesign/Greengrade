@@ -83,6 +83,7 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("GET /api/auth/challenge", s.limit(s.handleChallenge))
 	m.HandleFunc("POST /api/auth/magic", s.limit(s.handleMagicRequest))
 	m.HandleFunc("POST /api/auth/magic/verify", s.limit(s.handleMagicVerify))
+	m.HandleFunc("POST /api/auth/code", s.limit(s.handleCodeVerify))
 	m.HandleFunc("POST /api/auth/signup", s.limit(s.handleSignup))
 	m.HandleFunc("POST /api/auth/refresh", s.limit(s.handleRefresh))
 	m.HandleFunc("POST /api/auth/logout", s.handleLogout)
@@ -143,10 +144,28 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("POST /api/admin/strains/{id}/pin", s.admin(s.handleAdminPin))
 
 	m.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) { fail(w, http.StatusNotFound, "Nicht gefunden.") })
-	m.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok")) })
+	m.HandleFunc("GET /healthz", s.handleHealth)
 	m.Handle("/", s.spa())
 
 	return s.logging(s.headers(s.sameOrigin(m)))
+}
+
+// handleHealth checks the database. It only answers direct requests inside the Docker network
+// (healthcheck, monitoring); requests that came through a reverse proxy get a 404.
+func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("X-Forwarded-For") != "" || r.Header.Get("X-Real-IP") != "" || r.Header.Get("Forwarded") != "" {
+		http.NotFound(w, r)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	defer cancel()
+	w.Header().Set("Cache-Control", "no-store")
+	if err := s.db.Ping(ctx); err != nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte("db unavailable"))
+		return
+	}
+	w.Write([]byte("ok"))
 }
 
 // ---------- middleware ----------
@@ -188,7 +207,7 @@ func (s *Server) sameOrigin(next http.Handler) http.Handler {
 				fail(w, http.StatusForbidden, "Anfrage von fremder Herkunft abgelehnt.")
 				return
 			}
-			if !s.writeLim.Allow(s.ips.ClientIP(r)) {
+			if !s.writeLim.Allow(s.ips.LimitKey(r)) {
 				fail(w, http.StatusTooManyRequests, "Zu viele Anfragen. Bitte warte kurz.")
 				return
 			}
@@ -222,7 +241,7 @@ func redactPath(p string) string { return reUUIDPart.ReplaceAllString(p, ":id") 
 
 func (s *Server) limit(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !s.authLim.Allow(s.ips.ClientIP(r)) {
+		if !s.authLim.Allow(s.ips.LimitKey(r)) {
 			fail(w, http.StatusTooManyRequests, "Zu viele Versuche. Bitte warte eine Minute.")
 			return
 		}
@@ -291,12 +310,13 @@ func (s *Server) admin(h http.HandlerFunc) http.HandlerFunc {
 // ---------- cookies ----------
 
 const (
-	cookieAccess   = "__Host-gg_at"
-	cookieRefresh  = "__Host-gg_rt"
-	cookieWebAuthn = "__Host-gg_wa"
-	cookieOAuth    = "__Host-gg_oa"
-	accessTTL      = 15 * time.Minute
-	refreshTTL     = 30 * 24 * time.Hour
+	cookieAccess    = "__Host-gg_at"
+	cookieRefresh   = "__Host-gg_rt"
+	cookieWebAuthn  = "__Host-gg_wa"
+	cookieOAuth     = "__Host-gg_oa"
+	cookieLoginCode = "__Host-gg_lc"
+	accessTTL       = 15 * time.Minute
+	refreshTTL      = 30 * 24 * time.Hour
 )
 
 func (s *Server) setCookie(w http.ResponseWriter, name, value string, ttl time.Duration) {
@@ -409,6 +429,7 @@ func (s *Server) Housekeeping(ctx context.Context) {
 	run := func() {
 		db := s.db
 		db.Exec(ctx, `DELETE FROM used_tokens WHERE expires_at < now()`)
+		db.Exec(ctx, `DELETE FROM login_codes WHERE expires_at < now()`)
 		db.Exec(ctx, `DELETE FROM rate_events WHERE at < now() - interval '2 days'`)
 		db.Exec(ctx, `DELETE FROM strains s WHERE NOT EXISTS (SELECT 1 FROM entries e WHERE e.strain_id=s.id)
 			AND NOT EXISTS (SELECT 1 FROM public_ratings p WHERE p.strain_id=s.id)

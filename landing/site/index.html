@@ -16,6 +16,7 @@
       <a class="btn btn-primary" href="__APP_URL__/login">Kostenlos registrieren</a>
       <a class="btn btn-line" href="https://github.com/Br0kenByDesign/Greengrade" rel="noopener">Selbst hosten</a>
     </div>
+    <ul class="perks"><li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Kostenlos</li><li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Werbefrei</li><li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Open Source</li></ul>
   </div>
   <div class="devices" role="img" aria-label="greengrade im Browser und auf dem Handy">
     <div class="laptop"><div class="screen"><img src="/img/app-public.webp" width="1280" height="800" alt="" fetchpriority="high"></div><div class="base"></div></div>
@@ -102,6 +103,9 @@
     <div><h3>Löschen heißt löschen</h3><p>Wenn du dein Konto löschst, verschwindet alles sofort: Einträge, Fotos, Grows, öffentliche Bewertungen und Passkeys.</p></div>
     <div><h3>Kein Tracking</h3><p>Keine Werbung, keine Analyse-Tools, keine Schriften von Google. Diese Seite setzt überhaupt keine Cookies, die App nur die für die Anmeldung.</p></div>
     <div><h3>Deine Daten gehören dir</h3><p>Exportiere jederzeit alle Einträge und Fotos als ZIP-Datei - zum Sichern oder zum Umziehen auf deinen eigenen Server.</p></div>
+    <!-- Self-hosting? Adjust the server location below to your own setup. -->
+    <div><h3>Server in Deutschland</h3><p>Die App und alle Daten liegen auf einem Server in Deutschland. Die Verbindung dorthin ist durchgehend verschlüsselt.</p></div>
+    <div><h3>Open Source und nachprüfbar</h3><p>Der komplette Code ist öffentlich auf GitHub. Du musst uns nichts glauben - jede Zeile lässt sich nachlesen.</p></div>
   </div>
 </section>
 
@@ -113,7 +117,16 @@
   <div style="align-self:center"><a class="btn btn-line" href="https://github.com/Br0kenByDesign/Greengrade" rel="noopener">Auf GitHub ansehen</a></div>
 </section>
 </main>
-<footer class="foot"><span>greengrade ist nur für Personen ab 18 Jahren.</span><nav><a href="/impressum.html">Impressum</a><a href="/datenschutz.html">Datenschutz</a><a href="https://github.com/Br0kenByDesign/Greengrade" rel="noopener">GitHub</a></nav></footer>
+<footer class="foot">
+  <span>greengrade ist nur für Personen ab 18 Jahren.</span>
+  <nav>
+    <a href="__APP_URL__">App öffnen</a>
+    <a class="status" href="__STATUS_URL__" rel="noopener" data-optional="status"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>Systemstatus</a>
+    <a href="https://github.com/Br0kenByDesign/Greengrade" rel="noopener">GitHub</a>
+    <a href="/impressum.html">Impressum</a>
+    <a href="/datenschutz.html">Datenschutz</a>
+  </nav>
+</footer>
 </div>
 </body>
 </html>

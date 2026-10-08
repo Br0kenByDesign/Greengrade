@@ -97,6 +97,34 @@ func (t *Tokens) Verify(raw, typ string) (*Claims, error) {
 	return &c, nil
 }
 
+// Login codes: 6 characters without easily confused ones (0/O, 1/I/L), shown as "K7Q-4MX".
+const codeAlphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+
+func NewLoginCode() string {
+	b := make([]byte, 6)
+	if _, err := rand.Read(b); err != nil {
+		panic(err)
+	}
+	out := make([]byte, 6)
+	for i, v := range b {
+		// 256 % 31 introduces a tiny bias; irrelevant with 5 attempts per code
+		out[i] = codeAlphabet[int(v)%len(codeAlphabet)]
+	}
+	return string(out)
+}
+
+func FormatLoginCode(c string) string { return c[:3] + "-" + c[3:] }
+
+func NormalizeLoginCode(c string) string {
+	var b strings.Builder
+	for _, r := range strings.ToUpper(c) {
+		if (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
 // EmailHasher turns an address into a stable, non-reversible identifier.
 type EmailHasher struct{ key []byte }
 

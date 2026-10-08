@@ -6,6 +6,9 @@
   import { notify } from '../lib/toast.svelte.js';
   import { passkeyRegister, passkeysSupported } from '../lib/webauthn.js';
   import Icon from '../components/Icon.svelte';
+  import InstallHint from '../components/InstallHint.svelte';
+  import { isStandalone } from '../lib/install.svelte.js';
+  const standalone = isStandalone();
 
   let err = $state(''), name = $state(session.me.displayName), confirmText = $state(''), showDelete = $state(false);
   let theme = $state(localStorage.getItem('gg-theme') || 'system');
@@ -73,6 +76,13 @@
           {#if linked}<button class="linkbtn" onclick={() => unlink(p.id)}>Trennen</button>{:else}<button class="btn btn-line" onclick={() => (location.href = `/api/auth/oauth/${p.id}/start?mode=link`)}>Verknüpfen</button>{/if}
         </div>
       {/each}
+    </div>
+  {/if}
+
+  {#if !standalone}
+    <div class="sgroup">
+      <h2>App installieren</h2>
+      <InstallHint variant="inline" />
     </div>
   {/if}
 

@@ -1,0 +1,92 @@
+/* greengrade look for the Gatus status page (loaded via ui.custom-css in gatus/config.yaml).
+   Gatus loads this before its own stylesheet, so selectors are a bit more specific. */
+
+html:root {
+  --background: 0 0% 100%;
+  --foreground: 140 16% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 140 16% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 140 16% 11%;
+  --primary: 137 33% 27%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 90 18% 96%;
+  --secondary-foreground: 140 16% 11%;
+  --muted: 90 18% 96%;
+  --muted-foreground: 132 5% 40%;
+  --accent: 127 21% 92%;
+  --accent-foreground: 137 33% 27%;
+  --destructive: 5 58% 40%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 100 11% 89%;
+  --input: 100 11% 89%;
+  --ring: 137 33% 27%;
+  --radius: .75rem;
+  --gg-ok: 137 33% 27%;
+  --gg-ok-hover: 137 33% 20%;
+  --gg-bad: 5 58% 40%;
+  --gg-empty: 90 18% 93%;
+  --gg-display: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  --gg-body: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+html.dark:root {
+  --background: 135 11% 7%;
+  --foreground: 103 20% 93%;
+  --card: 130 10% 11%;
+  --card-foreground: 103 20% 93%;
+  --popover: 130 10% 11%;
+  --popover-foreground: 103 20% 93%;
+  --primary: 134 29% 63%;
+  --primary-foreground: 136 27% 8%;
+  --secondary: 130 10% 11%;
+  --secondary-foreground: 103 20% 93%;
+  --muted: 130 10% 11%;
+  --muted-foreground: 131 6% 61%;
+  --accent: 137 19% 15%;
+  --accent-foreground: 134 29% 63%;
+  --destructive: 6 66% 70%;
+  --border: 135 9% 17%;
+  --input: 135 9% 17%;
+  --ring: 134 29% 63%;
+  --gg-ok: 134 29% 63%;
+  --gg-ok-hover: 134 29% 72%;
+  --gg-bad: 6 66% 70%;
+  --gg-empty: 135 9% 17%;
+}
+
+/* typography */
+#global { font-family: var(--gg-body); -webkit-font-smoothing: antialiased; }
+#global h1, #global h2, #global h3 { font-family: var(--gg-display); letter-spacing: -.02em; }
+
+/* header: logo, wordmark, buttons */
+#global header { background: hsl(var(--background)) !important; backdrop-filter: none !important; }
+#global header a > div:first-child { width: 34px; height: 34px; }
+#global header h1 { font-size: 21px; font-weight: 600; letter-spacing: -.035em; }
+#global header h1 + p { display: none; }
+#global header nav a { border-radius: 10px; padding: 9px 14px; }
+#global header nav a:first-child { background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
+#global header nav a:first-child:hover { opacity: .9; }
+
+/* dashboard heading */
+#global main h1 { font-size: clamp(30px, 4vw, 42px); font-weight: 600; }
+
+/* only three checks: search, filter and sort are not needed */
+#global main .mb-6 > .bg-card.rounded-lg.border { display: none; }
+
+/* cards */
+#global .endpoint { border-radius: 16px; box-shadow: none; border-color: hsl(var(--border)); }
+#global .endpoint:hover { transform: none; box-shadow: none; border-color: hsl(var(--primary) / .45); }
+#global .endpoint h3 { font-weight: 600; }
+
+/* status colors: green from the brand, red for failures */
+#global .bg-green-500, #global .bg-green-400 { background-color: hsl(var(--gg-ok)); }
+#global .bg-green-700, #global .hover\:bg-green-700:hover { background-color: hsl(var(--gg-ok-hover)); }
+#global .bg-red-500, #global .bg-red-400, #global .bg-red-700, #global .hover\:bg-red-700:hover { background-color: hsl(var(--gg-bad)); }
+#global .bg-gray-200, html.dark #global .dark\:bg-gray-700 { background-color: hsl(var(--gg-empty)); }
+#global .text-green-500, #global .text-green-600 { color: hsl(var(--gg-ok)); }
+#global .text-red-500, #global .text-red-600 { color: hsl(var(--gg-bad)); }
+#global .rounded-sm { border-radius: 3px; }
+
+/* footer */
+#global footer .text-emerald-800 { color: hsl(var(--primary)); }
+#social { display: none; }

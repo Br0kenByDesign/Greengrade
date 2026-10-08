@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 )
 
 type count struct {
@@ -165,13 +166,31 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 		tops = tops[:5]
 	}
 	months := []map[string]any{}
-	keys := make([]string, 0, len(monthly))
+	// continuous timeline of 12 months, empty months included. It ends with the current
+	// month, or with the latest tasting if there was none in the last year.
+	end := time.Now()
+	latest := ""
 	for k := range monthly {
+		if k > latest {
+			latest = k
+		}
+	}
+	if latest != "" {
+		if t, err := time.Parse("2006-01", latest); err == nil && t.Before(end.AddDate(-1, 0, 0)) {
+			end = t
+		}
+	}
+	end = time.Date(end.Year(), end.Month(), 1, 0, 0, 0, 0, time.UTC)
+	keys := make([]string, 0, 12)
+	for i := 11; i >= 0; i-- {
+		k := end.AddDate(0, -i, 0).Format("2006-01")
+		if monthly[k] == nil {
+			monthly[k] = &group{}
+		}
 		keys = append(keys, k)
 	}
-	sort.Strings(keys)
-	if len(keys) > 12 {
-		keys = keys[len(keys)-12:]
+	if latest == "" {
+		keys = nil
 	}
 	for _, k := range keys {
 		months = append(months, map[string]any{"month": k, "count": monthly[k].Count, "avg": monthly[k].Avg})

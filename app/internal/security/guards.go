@@ -167,6 +167,19 @@ func (r *IPResolver) ClientIP(req *http.Request) string {
 	return host
 }
 
+// LimitKey groups addresses for rate limiting: IPv4 per address, IPv6 per /64 network,
+// because a single IPv6 connection usually controls a whole /64.
+func (r *IPResolver) LimitKey(req *http.Request) string {
+	ip := net.ParseIP(r.ClientIP(req))
+	if ip == nil {
+		return "unknown"
+	}
+	if v4 := ip.To4(); v4 != nil {
+		return v4.String()
+	}
+	return ip.Mask(net.CIDRMask(64, 128)).String() + "/64"
+}
+
 // ---------- Public comment filter ----------
 
 var (

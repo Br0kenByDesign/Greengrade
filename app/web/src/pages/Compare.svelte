@@ -39,7 +39,7 @@
     {/each}
   </div>
   {#if A && B}
-    <div class="radarwrap" style="margin-top:28px">
+    <div class="compare-chart">
       <Radar series={[{ values: A.latest, color: COLORS[0] }, { values: B.latest, color: COLORS[1] }]} />
       <div>
         <div class="legend"><span><i style="background:{COLORS[0]}"></i>{A.strainName}</span><span><i style="background:{COLORS[1]}"></i>{B.strainName}</span></div>

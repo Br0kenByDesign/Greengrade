@@ -1,10 +1,15 @@
 <script>
   import { api } from '../lib/api.js';
   import { session } from '../lib/session.svelte.js';
-  import { greeting, score, num, SOURCE, FORM, daysSince, addDays, date } from '../lib/format.js';
+  import { greeting, score, num, plural, SOURCE, FORM, daysSince, addDays, date } from '../lib/format.js';
   import Icon from '../components/Icon.svelte';
   import StrainImage from '../components/StrainImage.svelte';
   import Bars from '../components/Bars.svelte';
+  import InstallHint from '../components/InstallHint.svelte';
+  import { countVisit, showBanner } from '../lib/install.svelte.js';
+
+  countVisit();
+  let installHint = $state(showBanner());
 
   let entries = $state(null), stats = $state(null), grows = $state([]), err = $state('');
   let filter = $state('all'), q = $state('');
@@ -30,10 +35,12 @@
   }
 </script>
 
+{#if installHint}<InstallHint onclose={() => (installHint = false)} />{/if}
+
 <div class="head">
   <div>
     <h1>{greeting()}, {session.me.displayName}</h1>
-    {#if stats?.top?.[0]}<p class="muted">{stats.entries} {stats.entries === 1 ? 'Sorte' : 'Sorten'} in deinem Logbuch. Vorne liegt {stats.top[0].name} mit {score(stats.top[0].overall)}.</p>{/if}
+    {#if stats?.top?.[0]}<p class="muted">{plural(stats.entries, 'Sorte', 'Sorten')} in deinem Logbuch. Vorne liegt {stats.top[0].name} mit {score(stats.top[0].overall)}.</p>{/if}
   </div>
   <a class="btn btn-primary" href="/entries/new"><Icon name="plus" />Sorte bewerten</a>
 </div>
@@ -100,7 +107,7 @@
             <div><b>{score(stats.community.mine)}</b><span>Deine Ø-Note</span></div>
             <div><b>{score(stats.community.theirs)}</b><span>Community-Ø derselben Sorten</span></div>
           </div>
-          <p class="muted" style="font-size:13px;margin-top:10px">Verglichen über {stats.community.strains} Sorte{stats.community.strains === 1 ? '' : 'n'}, die auch andere bewertet haben.</p>
+          <p class="muted" style="font-size:13px;margin-top:10px">Verglichen über {plural(stats.community.strains, 'Sorte', 'Sorten')}, die auch andere bewertet haben.</p>
         </div>
       {/if}
     </aside>

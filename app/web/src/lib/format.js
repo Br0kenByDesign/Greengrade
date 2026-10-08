@@ -12,6 +12,9 @@ export function daysSince(s) { if (!s) return null; return Math.floor((Date.now(
 export function addDays(s, n) { const d = new Date(s + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); }
 export const parseNum = v => { if (v == null || v === '') return null; const n = parseFloat(String(v).replace(',', '.')); return isNaN(n) ? null : n; };
 export function greeting() { const h = new Date().getHours(); return h < 11 ? 'Guten Morgen' : h < 18 ? 'Hallo' : 'Guten Abend'; }
+// n with the right noun: plural(1, 'Sorte', 'Sorten') -> '1 Sorte'
+export const plural = (n, one, many) => `${num(n, 0)} ${n === 1 ? one : many}`;
+export const MONTHS_SHORT = MONTHS;
 export const SOURCE = { grow: 'Eigener Grow', pharmacy: 'Apotheke' };
 export const FORM = { flower: 'Blüten', extract: 'Extrakt' };
 export const CATS = [['smell', 'Geruch'], ['taste', 'Geschmack'], ['look', 'Aussehen'], ['effect', 'Wirkung'], ['quality', 'Qualität']];
