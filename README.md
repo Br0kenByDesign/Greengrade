@@ -32,7 +32,6 @@ Die Oberfläche ist auf Deutsch.
 - Zwei Sorten nebeneinander vergleichen
 - Vergleich der eigenen Noten mit dem Community-Durchschnitt
 
-
 **Öffentliche Bewertungen**
 - Pro Eintrag wählbar: Bewertung öffentlich teilen, optional mit Kommentar und Foto
 - Öffentlich sichtbar sind nur Noten, Kommentar, Foto und der Monat - nie Name, Herkunft oder Konsumdetails
@@ -47,14 +46,15 @@ Die Oberfläche ist auf Deutsch.
 - Betroffene werden in der App informiert (es gibt keine E-Mail-Adressen, an die man schreiben könnte)
 
 **Konto**
-- Anmeldung per Passkey, Magic Link per Mail oder optional Google, GitHub, Discord
+- Anmeldung per Passkey, Magic Link per Mail (alternativ mit Code aus der Mail, z. B. in der installierten iPhone-App) oder optional Google, GitHub, Discord
+- Hinweis zum Installieren als App auf dem Handy, mit Ein-Klick-Installation auf Android
 - Mehrere Passkeys, verknüpfte Anmeldungen, "Überall abmelden"
 - Datenexport als ZIP (JSON und Fotos), Konto sofort und vollständig löschen
 - Hell, dunkel oder systemabhängig
 
-**Landingpage**
+**Landingpage und Statusseite**
 - Statische Seite zur Erklärung der App, mit Vorlagen für Impressum und Datenschutz
-
+- Optionale Statusseite (Gatus) im selben Design, prüft App, Datenbank und Landingpage
 
 ## Datenschutz und Sicherheit
 
@@ -65,7 +65,8 @@ Die Oberfläche ist auf Deutsch.
 - **Social Login** fragt nur die Nutzer-ID ab, keine E-Mail und kein Profil. Konten werden nie automatisch über E-Mail-Adressen verknüpft.
 - **"Überall abmelden"** und Konto löschen wirken sofort.
 - **Fotos** werden im Browser und auf dem Server neu kodiert. Standort, Aufnahmezeit, Kameradaten und alle anderen Metadaten verschwinden, präparierte Dateien werden neutralisiert. Fotos sind privat, solange sie nicht geteilt werden.
-- **Missbrauchsschutz** ohne Drittanbieter: Proof-of-Work nach dem ALTCHA-Protokoll, Rate-Limits pro IP und pro E-Mail-Fingerabdruck, Filter gegen Links, Telefonnummern und Kontaktangebote in öffentlichen Kommentaren.
+- **Anmeldecodes** gelten nur auf dem Gerät, das sie angefordert hat, 10 Minuten lang und für höchstens 5 Versuche. Link und Code heben sich gegenseitig auf.
+- **Missbrauchsschutz** ohne Drittanbieter: Proof-of-Work nach dem ALTCHA-Protokoll, Rate-Limits pro IPv4-Adresse bzw. pro IPv6-/64-Netz und pro E-Mail-Fingerabdruck, Filter gegen Links, Telefonnummern und Kontaktangebote in öffentlichen Kommentaren.
 - **CSRF-Schutz** über SameSite-Cookies und `Origin`-Prüfung.
 - **Strikte Content-Security-Policy** ohne Inline-Skripte. Schriften sind selbst gehostet, es gibt keine Anfragen an Dritte und kein Tracking.
 - **Datensparsame Logs** ohne IP-Adressen, Query-Strings oder IDs.
@@ -78,6 +79,7 @@ Die Oberfläche ist auf Deutsch.
 | `app` | Go-API mit eingebetteter Svelte-5-PWA |
 | `db` | PostgreSQL 17 |
 | `landing` | Statische Landingpage (nginx, keine Skripte, kein Backend) |
+| `status` | Optional: Statusseite mit [Gatus](https://github.com/TwiN/gatus) |
 
 App und Landingpage laufen typischerweise unter zwei (Sub-)Domains, z. B. `app.example.com` und `example.com`.
 
@@ -124,6 +126,8 @@ Alle Einstellungen stehen kommentiert in [`.env.example`](.env.example). Die wic
 | `ADMIN_EMAILS` | Konten mit Zugriff auf die Moderation (kommagetrennt) |
 | `MODERATION_EMAIL` | Erhält bei jeder Meldung eine kurze Benachrichtigung |
 | `PRIVACY_URL`, `IMPRINT_URL` | Links zu Datenschutz und Impressum in der App |
+| `LANDING_URL` | Adresse der Landingpage, z. B. `https://example.com` |
+| `COMPOSE_PROFILES`, `STATUS_URL` | Statusseite aktivieren und auf der Landingpage verlinken (siehe unten) |
 | `OAUTH_*` | Zugangsdaten für Social Login, leer = deaktiviert |
 | `TRUSTED_PROXIES` | Netze, deren `X-Forwarded-For` vertraut wird |
 
@@ -131,7 +135,7 @@ Secrets lassen sich auch als Datei übergeben: `APP_SECRET_FILE=/run/secrets/app
 
 ## Reverse Proxy
 
-`app` und `landing` lauschen jeweils auf Port 8080 im Docker-Netz `PROXY_NETWORK`. Der Reverse Proxy muss TLS terminieren und `X-Forwarded-For` setzen. Uploads bis 15 MB müssen erlaubt sein.
+`app`, `landing` und (optional) `status` lauschen jeweils auf Port 8080 im Docker-Netz `PROXY_NETWORK`. Der Reverse Proxy muss TLS terminieren und `X-Forwarded-For` setzen. Uploads bis 15 MB müssen erlaubt sein.
 
 **Caddy**
 
@@ -164,9 +168,36 @@ server {
 }
 ```
 
-**Nginx Proxy Manager / Traefik:** Je einen Host für die beiden Domains auf `app:8080` bzw. `landing:8080` anlegen, SSL erzwingen und bei der App das Upload-Limit auf 20 MB erhöhen (NPM: unter "Advanced" `client_max_body_size 20m;`).
+**Nginx Proxy Manager / Traefik:** Je einen Host für die Domains auf `app:8080`, `landing:8080` und ggf. `status:8080` anlegen, SSL erzwingen und bei der App das Upload-Limit auf 20 MB erhöhen (NPM: unter "Advanced" `client_max_body_size 20m;`).
+
+> **Als Ziel immer den Containernamen eintragen, keine IP-Adresse.** Docker vergibt die IPs bei jedem Neustart neu. Steht im Proxy eine IP, landen Anfragen nach einem Update womöglich bei einem anderen Container - die App zeigt dann nur noch "Da ist etwas schiefgelaufen", weil die API mit 404 antwortet.
 
 Ohne Reverse Proxy im Docker-Netz kannst du in `docker-compose.yml` das Netz `proxy` entfernen und die Ports lokal veröffentlichen (siehe Kommentare dort).
+
+## Statusseite (optional)
+
+Der Container `status` ist eine [Gatus](https://github.com/TwiN/gatus)-Instanz im Design von greengrade. Er prüft jede Minute:
+
+- **App (Server und Datenbank):** direkt im Docker-Netz über `http://app:8080/healthz`. Dieser Endpunkt prüft die Datenbank und antwortet nur auf direkte Anfragen - über den Reverse Proxy kommt ein 404.
+- **App** und **Website:** über die öffentlichen Adressen, inklusive Antwortzeit und Ablaufdatum der TLS-Zertifikate.
+
+Aktivieren in `.env`:
+
+```env
+LANDING_URL=https://example.com
+COMPOSE_PROFILES=status
+STATUS_URL=https://status.example.com
+```
+
+Danach `docker compose up -d --build` und im Reverse Proxy `status.example.com` auf `status:8080` leiten. Mit `STATUS_URL` erscheint auf der Landingpage unten ein Link "Systemstatus", ohne den Wert fehlt er.
+
+Anpassen lässt sich alles in [`gatus/config.yaml`](gatus/config.yaml) (Prüfungen, Texte, Benachrichtigungen per ntfy, Telegram, Discord oder Mail) und das Aussehen in [`design/status.css`](design/status.css). Die Gatus-Oberfläche selbst ist englisch.
+
+Läuft die Statusseite auf demselben Server wie die App, fällt sie mit ihm aus. Für echte Ausfallmeldungen sollte Gatus auf einem anderen Gerät laufen.
+
+## Eigene Seiten für die Landingpage
+
+Dateien in `landing/local/` überschreiben beim Build die gleichnamigen Dateien aus `landing/site/`. Dort gehören z. B. dein ausgefülltes `impressum.html` und `datenschutz.html` hin. Der Ordner wird von git ignoriert, so bleiben persönliche Angaben aus dem Repository heraus.
 
 ## Mailversand
 
@@ -226,8 +257,9 @@ Mit einer Adresse aus `ADMIN_EMAILS` registrieren. In der Navigation erscheint d
 
 Vor einem öffentlichen Betrieb:
 
-- `landing/site/impressum.html` und `landing/site/datenschutz.html` sind **Vorlagen**. Alle Angaben in eckigen Klammern ersetzen und rechtlich prüfen lassen. Die App kann Gesundheitsdaten verarbeiten (Art. 9 DSGVO); die Einwilligung wird bei der Registrierung abgefragt.
+- `landing/site/impressum.html` und `landing/site/datenschutz.html` sind **Vorlagen**. Kopiere sie nach `landing/local/`, ersetze dort alle Angaben in eckigen Klammern und lass sie rechtlich prüfen. Die App kann Gesundheitsdaten verarbeiten (Art. 9 DSGVO); die Einwilligung wird bei der Registrierung abgefragt.
 - `PRIVACY_URL` und `IMPRINT_URL` setzen.
+- Die Landingpage nennt "Server in Deutschland" - in `landing/site/index.html` an deinen Standort anpassen.
 - Die Landingpage verlinkt auf `APP_ORIGIN`; der Wert wird beim Build eingesetzt.
 
 ## Backups
@@ -246,7 +278,9 @@ git pull
 docker compose up -d --build
 ```
 
-Datenbank-Migrationen laufen beim Start automatisch.
+Datenbank-Migrationen laufen beim Start automatisch. Was sich zwischen den Versionen geändert hat, steht im [CHANGELOG](CHANGELOG.md).
+
+Docker Compose benennt die Volumes nach dem Ordnernamen. Das Repository deshalb immer im selben Ordner aktualisieren - in einem neu benannten Ordner startet die App mit leeren Volumes.
 
 ## Entwicklung
 
@@ -279,10 +313,12 @@ app/
   internal/db/          Datenbank und Migrationen
   web/                  Svelte-5-PWA, wird nach webui/dist gebaut und eingebettet
 landing/                Statische Landingpage und nginx-Konfiguration
+  local/                eigene Seiten (git-ignoriert), überschreiben landing/site/
+gatus/                  Statusseite: Konfiguration und Dockerfile
 ```
 
 ## Hinweis
 
-greengrade ist ein Werkzeug für Erwachsene zur persönlichen Dokumentation. Es ersetzt keine medizinische Beratung. Wer eine Instanz betreibt, ist selbst für den rechtskonformen Betrieb verantwortlich (Impressum, Datenschutz, Jugendschutz, Moderation nach dem Digital Services Act).
+greengrade ist ein Werkzeug für Erwachsene zur persönlichen Dokumentation. Es ersetzt keine medizinische Beratung. 
 
 Schriften: Bricolage Grotesque und Geist, beide unter der SIL Open Font License (siehe `design/fonts`).
