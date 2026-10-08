@@ -2,6 +2,23 @@
 
 Alle nennenswerten Änderungen an greengrade. Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), die Versionen an [Semantic Versioning](https://semver.org/lang/de/).
 
+## [1.3.0] - 2026-10-09
+
+### Neu
+- **Nutzungsbedingungen:** Vorlage `landing/site/nutzungsbedingungen.html` mit den Moderationsregeln nach Art. 14 DSA (was nicht erlaubt ist, automatische Prüfungen, menschliche Prüfung, Maßnahmen, Widerspruch). Verlinkt in allen Footern, auf der Anmeldeseite und bei der Registrierung. Neue Variable `TERMS_URL`.
+- **Rückmeldung für Meldende:** Wer etwas meldet, erhält in der App eine Nachricht, ob der Inhalt ausgeblendet, umbenannt oder belassen wurde (Art. 16 Abs. 5 DSA). Die gemeldete Person bleibt dabei anonym.
+- **Statistik und Vergleichen auf dem Smartphone:** Im Tab "Übersicht" gibt es oben eine Umschaltung zwischen Übersicht, Statistik und Vergleichen. Bisher waren beide Seiten mobil nicht erreichbar.
+
+### Geändert
+- **Impressum-Vorlage:** zweiter schneller Kontaktweg neben E-Mail, Kontaktstelle nach Art. 11 und 12 DSA mit Sprachen, Verweis auf die Nutzungsbedingungen.
+- **Datenschutz-Vorlage:** Übermittlung in Drittländer (EU-US Data Privacy Framework, Standardvertragsklauseln), Rechtsgrundlage für Missbrauchsschutz (Art. 6 Abs. 1 lit. f DSGVO), Social Login als pseudonyme Kennung, Art. 9 DSGVO für öffentliche Bewertungen, Statusseite, Speicher im Browser (§ 25 Abs. 2 TDDDG), Protokolle bei Reverse Proxy und Hoster, Speicherfristen, Stand.
+- **Moderationsnachrichten** an Betroffene nennen jetzt den Weg zum Widerspruch (Art. 17 DSA).
+
+### Behoben
+- Auf dem Smartphone waren die Werte in den Details einer Bewertung nicht alle rechtsbündig.
+- Die Links zu Impressum und Datenschutz auf der Anmeldeseite standen ohne Abstand aneinander.
+- Lange Überschriften auf den Rechtsseiten und die Geräteabbildung auf der Startseite erzeugten auf schmalen Bildschirmen seitliches Scrollen. Footer-Links brechen jetzt um.
+
 ## [1.2.0] - 2026-10-08
 
 Sicherheits- und Moderationsupdate nach einer Code-Prüfung.
@@ -78,6 +95,7 @@ Erste Version.
 - Datenexport und sofortiges Löschen des Kontos
 - Statische Landingpage, drei gehärtete Container mit Docker Compose
 
+[1.3.0]: https://github.com/Br0kenByDesign/Greengrade/releases/tag/v1.3.0
 [1.2.0]: https://github.com/Br0kenByDesign/Greengrade/releases/tag/v1.2.0
 [1.1.0]: https://github.com/Br0kenByDesign/Greengrade/releases/tag/v1.1.0
 [1.0.0]: https://github.com/Br0kenByDesign/Greengrade/releases/tag/1.0.0

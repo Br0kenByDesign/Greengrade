@@ -1,8 +1,8 @@
 @import "/design/fonts.css";
 @import "/design/tokens.css";
 *,*::before,*::after{box-sizing:border-box}
-html{scroll-behavior:smooth;scroll-padding-top:16px}
-body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 var(--body);-webkit-font-smoothing:antialiased;padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0)}
+html{scroll-behavior:smooth;overflow-x:clip;scroll-padding-top:16px}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 var(--body);-webkit-font-smoothing:antialiased;overflow-x:clip;padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0)}
 h1,h2,h3{font-family:var(--display);font-weight:600;letter-spacing:-.025em;line-height:1.1;margin:0}
 p{margin:0}
 a{color:var(--leaf)}
@@ -50,13 +50,16 @@ svg{display:block;max-width:100%}
 .privacy .key p{color:inherit;opacity:.9;max-width:66ch}
 .privacy .key svg{width:52px;height:52px}
 .foot{border-top:1px solid var(--line);padding:24px 0 36px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;font-size:14px;color:var(--muted)}
-.foot nav{display:flex;gap:18px}
+.foot nav{display:flex;gap:10px 18px;flex-wrap:wrap}
 .foot a{color:var(--muted)}
-.legal{max-width:720px;padding:24px 0 48px}
-.legal h1{font-size:40px;margin-bottom:18px}
+.legal{max-width:720px;padding:24px 0 48px;overflow-wrap:break-word;hyphens:auto}
+.legal h1{font-size:clamp(28px,8vw,40px);margin-bottom:18px}
 .legal h2{font-size:22px;margin:30px 0 8px}
 .legal h3{font-size:17px;margin:18px 0 4px}
 .legal p{color:var(--ink);margin-bottom:8px;line-height:1.65}
+.legal ul{margin:0 0 10px;padding-left:22px;line-height:1.65}
+.legal li{margin-bottom:4px}
+.legal .stand{color:var(--muted);font-size:14px;margin-top:30px}
 .todo{background:var(--resin-soft);border-radius:12px;padding:12px 14px;font-size:14px}
 /* device frames with app screenshots */
 :root{--frame:#1C1F1D;--base1:#DADDD8;--base2:#B8BDB7}

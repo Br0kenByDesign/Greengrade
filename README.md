@@ -3,11 +3,6 @@
 <h1 align="center">greengrade</h1>
 
 <p align="center">Ein privates Logbuch zum Bewerten von Cannabis aus Apotheke und eigenem Grow.<br>Selbst gehostet, ohne Passwörter, mit optionalen anonymen öffentlichen Bewertungen.</p>
-<p align="center">
-  <a href="https://greengrade.cloud">greengrade.cloud</a><br>
-  <a href="https://app.greengrade.cloud"">app.greengrade.cloud</a><br>
-  <a href="https://status.greengrade.cloud"">status.greengrade.cloud</a>
-</p>
 
 ---
 
@@ -51,6 +46,7 @@ Die Oberfläche ist auf Deutsch.
 - Ausgeblendete Inhalte bleiben ausgeblendet, auch wenn sie erneut geteilt werden (Fingerabdruck von Text und Foto)
 - Sperre fürs öffentliche Teilen bei wiederholten Verstößen - das private Logbuch bleibt nutzbar
 - Protokoll aller Moderationsentscheidungen; Konten erscheinen dort nur als anonyme Kennung
+- Betroffene erhalten eine Begründung mit Hinweis auf den Widerspruch, Meldende eine Nachricht über das Ergebnis ihrer Meldung (Art. 16 und 17 DSA)
 - Betroffene werden in der App informiert (es gibt keine E-Mail-Adressen, an die man schreiben könnte)
 
 **Konto**
@@ -62,7 +58,7 @@ Die Oberfläche ist auf Deutsch.
 - Hell, dunkel oder systemabhängig
 
 **Landingpage und Statusseite**
-- Statische Seite zur Erklärung der App, mit Vorlagen für Impressum und Datenschutz
+- Statische Seite zur Erklärung der App, mit Vorlagen für Impressum, Datenschutz und Nutzungsbedingungen
 - Optionale Statusseite (Gatus) im selben Design, prüft App, Datenbank und Landingpage
 
 ## Datenschutz und Sicherheit
@@ -135,7 +131,7 @@ Alle Einstellungen stehen kommentiert in [`.env.example`](.env.example). Die wic
 | `MAIL_PROVIDER` | `smtp`, `graph` oder `log` |
 | `ADMIN_EMAILS` | Konten mit Zugriff auf die Moderation (kommagetrennt) |
 | `MODERATION_EMAIL` | Erhält bei jeder Meldung eine kurze Benachrichtigung |
-| `PRIVACY_URL`, `IMPRINT_URL` | Links zu Datenschutz und Impressum in der App |
+| `PRIVACY_URL`, `IMPRINT_URL`, `TERMS_URL` | Links zu Datenschutz, Impressum und Nutzungsbedingungen in der App |
 | `LANDING_URL` | Adresse der Landingpage, z. B. `https://example.com` |
 | `COMPOSE_PROFILES`, `STATUS_URL` | Statusseite aktivieren und auf der Landingpage verlinken (siehe unten) |
 | `OAUTH_*` | Zugangsdaten für Social Login, leer = deaktiviert |
@@ -207,7 +203,7 @@ Läuft die Statusseite auf demselben Server wie die App, fällt sie mit ihm aus.
 
 ## Eigene Seiten für die Landingpage
 
-Dateien in `landing/local/` überschreiben beim Build die gleichnamigen Dateien aus `landing/site/`. Dort gehören z. B. dein ausgefülltes `impressum.html` und `datenschutz.html` hin. Der Ordner wird von git ignoriert, so bleiben persönliche Angaben aus dem Repository heraus.
+Dateien in `landing/local/` überschreiben beim Build die gleichnamigen Dateien aus `landing/site/`. Dort gehören z. B. dein ausgefülltes `impressum.html`, `datenschutz.html` und `nutzungsbedingungen.html` hin. Der Ordner wird von git ignoriert, so bleiben persönliche Angaben aus dem Repository heraus.
 
 ## Mailversand
 
@@ -268,8 +264,9 @@ Mit einer Adresse aus `ADMIN_EMAILS` registrieren. In der Navigation erscheint d
 
 Vor einem öffentlichen Betrieb:
 
-- `landing/site/impressum.html` und `landing/site/datenschutz.html` sind **Vorlagen**. Kopiere sie nach `landing/local/`, ersetze dort alle Angaben in eckigen Klammern und lass sie rechtlich prüfen. Die App kann Gesundheitsdaten verarbeiten (Art. 9 DSGVO); die Einwilligung wird bei der Registrierung abgefragt.
-- `PRIVACY_URL` und `IMPRINT_URL` setzen.
+- `landing/site/impressum.html`, `landing/site/datenschutz.html` und `landing/site/nutzungsbedingungen.html` sind **Vorlagen**. Kopiere sie nach `landing/local/`, ersetze dort alle Angaben in eckigen Klammern und lass sie rechtlich prüfen. Die App kann Gesundheitsdaten verarbeiten (Art. 9 DSGVO); die Einwilligung wird bei der Registrierung abgefragt.
+- `PRIVACY_URL`, `IMPRINT_URL` und `TERMS_URL` setzen.
+- Dein Reverse Proxy schreibt vermutlich Zugriffsprotokolle mit IP-Adressen (bei Nginx Proxy Manager standardmäßig). Schalte sie ab, z. B. mit `access_log off;` im Feld "Advanced" des Proxy Hosts, oder nenne sie in der Datenschutzerklärung.
 - Die Landingpage nennt "Server in Deutschland" - in `landing/site/index.html` an deinen Standort anpassen.
 - Die Landingpage verlinkt auf `APP_ORIGIN`; der Wert wird beim Build eingesetzt.
 
