@@ -41,14 +41,18 @@ Die Oberfläche ist auf Deutsch.
 - Für Sorten ohne Foto wird automatisch eine eigene Illustration erzeugt
 
 **Moderation**
-- Kommentare und Fotos melden
+- Kommentare, Fotos und Sortennamen melden
 - Moderationsbereich: Meldungen prüfen, Inhalte ausblenden, Sorten umbenennen und zusammenführen, Titelbilder festlegen
+- Ausgeblendete Inhalte bleiben ausgeblendet, auch wenn sie erneut geteilt werden (Fingerabdruck von Text und Foto)
+- Sperre fürs öffentliche Teilen bei wiederholten Verstößen - das private Logbuch bleibt nutzbar
+- Protokoll aller Moderationsentscheidungen; Konten erscheinen dort nur als anonyme Kennung
 - Betroffene werden in der App informiert (es gibt keine E-Mail-Adressen, an die man schreiben könnte)
 
 **Konto**
 - Anmeldung per Passkey, Magic Link per Mail (alternativ mit Code aus der Mail, z. B. in der installierten iPhone-App) oder optional Google, GitHub, Discord
 - Hinweis zum Installieren als App auf dem Handy, mit Ein-Klick-Installation auf Android
 - Mehrere Passkeys, verknüpfte Anmeldungen, "Überall abmelden"
+- Kurze Bestätigung (Passkey, Code per Mail oder Social Login) vor sensiblen Aktionen
 - Datenexport als ZIP (JSON und Fotos), Konto sofort und vollständig löschen
 - Hell, dunkel oder systemabhängig
 
@@ -58,15 +62,16 @@ Die Oberfläche ist auf Deutsch.
 
 ## Datenschutz und Sicherheit
 
-- **Keine Passwörter, keine Sessions in der Datenbank.** Zugang über kurzlebige, Ed25519-signierte JWTs in `__Host-`-Cookies (`HttpOnly`, `Secure`, `SameSite=Lax`). Access-Token 15 Minuten, Refresh-Token 30 Tage.
+- **Keine Passwörter, keine Sessions in der Datenbank.** Zugang über kurzlebige, Ed25519-signierte JWTs in `__Host-`-Cookies (`HttpOnly`, `Secure`, `SameSite=Lax`). Access-Token 15 Minuten, Refresh-Token 14 Tage.
+- **Bestätigung vor sensiblen Aktionen:** Passkey hinzufügen oder entfernen, Anmeldungen verknüpfen oder trennen, Datenexport und Konto löschen gehen nur, wenn die letzte echte Anmeldung höchstens 10 Minuten zurückliegt. Sonst fragt die App kurz nach. Neue Passkeys und Verknüpfungen erscheinen zusätzlich als Hinweis im Konto.
 - **Keine E-Mail-Adressen in der Datenbank.** Gespeichert wird nur ein HMAC-SHA-256-Fingerabdruck mit geheimem Schlüssel.
 - **Magic Links** sind 10 Minuten gültig und nur einmal verwendbar. Das Token steht im URL-Fragment und wird erst per Klick eingelöst, damit Mail-Scanner es nicht verbrauchen.
-- **Passkeys** (WebAuthn): Gespeichert werden nur öffentliche Schlüssel.
+- **Passkeys** (WebAuthn): Gespeichert werden nur öffentliche Schlüssel. PIN oder Biometrie sind Pflicht, jede Anmeldung ist nur einmal gültig, und Passkeys, die sich wie eine Kopie verhalten, werden gesperrt.
 - **Social Login** fragt nur die Nutzer-ID ab, keine E-Mail und kein Profil. Konten werden nie automatisch über E-Mail-Adressen verknüpft.
 - **"Überall abmelden"** und Konto löschen wirken sofort.
-- **Fotos** werden im Browser und auf dem Server neu kodiert. Standort, Aufnahmezeit, Kameradaten und alle anderen Metadaten verschwinden, präparierte Dateien werden neutralisiert. Fotos sind privat, solange sie nicht geteilt werden.
+- **Fotos** werden im Browser und auf dem Server neu kodiert. Standort, Aufnahmezeit, Kameradaten und alle anderen Metadaten verschwinden, präparierte Dateien werden neutralisiert. Fotos sind privat, solange sie nicht geteilt werden, und der Browser muss bei jedem Abruf neu nachfragen, ob er sie noch sehen darf. Höchstens zwei Fotos werden gleichzeitig verarbeitet (bis 24 Megapixel), damit Uploads den Server nicht überlasten.
 - **Anmeldecodes** gelten nur auf dem Gerät, das sie angefordert hat, 10 Minuten lang und für höchstens 5 Versuche. Link und Code heben sich gegenseitig auf.
-- **Missbrauchsschutz** ohne Drittanbieter: Proof-of-Work nach dem ALTCHA-Protokoll, Rate-Limits pro IPv4-Adresse bzw. pro IPv6-/64-Netz und pro E-Mail-Fingerabdruck, Filter gegen Links, Telefonnummern und Kontaktangebote in öffentlichen Kommentaren.
+- **Missbrauchsschutz** ohne Drittanbieter: Proof-of-Work nach dem ALTCHA-Protokoll, Rate-Limits pro IPv4-Adresse bzw. pro IPv6-/64-Netz und pro E-Mail-Fingerabdruck, Filter gegen Links, Telefonnummern und Kontaktangebote in öffentlichen Kommentaren und Sortennamen.
 - **CSRF-Schutz** über SameSite-Cookies und `Origin`-Prüfung.
 - **Strikte Content-Security-Policy** ohne Inline-Skripte. Schriften sind selbst gehostet, es gibt keine Anfragen an Dritte und kein Tracking.
 - **Datensparsame Logs** ohne IP-Adressen, Query-Strings oder IDs.
@@ -224,7 +229,8 @@ Unverschlüsselte Verbindungen werden abgelehnt.
    mkdir -p secrets
    openssl req -x509 -newkey rsa:3072 -nodes -days 730 -subj "/CN=greengrade" \
      -keyout secrets/graph.key -out secrets/graph.crt
-   chmod 644 secrets/graph.key secrets/graph.crt   # der Container läuft als UID 65532
+   sudo chown -R 65532:65532 secrets              # der Container läuft als UID 65532
+   sudo chmod 700 secrets && sudo chmod 600 secrets/*
    ```
    In `.env`: `GRAPH_CERT_FILE=/run/secrets/graph.crt` und `GRAPH_KEY_FILE=/run/secrets/graph.key`.
 3. **Senderecht auf ein einziges Postfach beschränken.** Eine App mit `Mail.Send` darf sonst als *jedes* Postfach im Tenant senden. Empfohlen ist RBAC for Applications in Exchange Online (dann `Mail.Send` nicht zusätzlich in Entra vergeben):

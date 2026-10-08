@@ -34,6 +34,7 @@ services:
       DATABASE_URL: postgres://greengrade:${POSTGRES_PASSWORD}@db:5432/greengrade?sslmode=disable
       DATA_DIR: /data
       LISTEN_ADDR: ":8080"
+      GOMEMLIMIT: 600MiB          # Go frees memory before the container limit is reached
     volumes:
       - photos:/data
       - ./secrets:/run/secrets:ro   # optional, e.g. Microsoft Graph certificate
@@ -41,10 +42,10 @@ services:
     # Without a dockerized reverse proxy: remove "proxy" above and publish the port locally instead
     # ports: ["127.0.0.1:8080:8080"]
     read_only: true
-    tmpfs: [/tmp]
+    tmpfs: ["/tmp:size=16m"]
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
-    mem_limit: 512m
+    mem_limit: 768m
     pids_limit: 200
 
   landing:
@@ -59,7 +60,7 @@ services:
     networks: [proxy]
     # ports: ["127.0.0.1:8081:8080"]
     read_only: true
-    tmpfs: [/tmp]
+    tmpfs: ["/tmp:size=16m"]
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     mem_limit: 64m
@@ -80,7 +81,7 @@ services:
     networks: [proxy]       # reaches app:8080 and landing:8080 directly, and the public URLs
     # ports: ["127.0.0.1:8082:8080"]
     read_only: true
-    tmpfs: [/tmp]
+    tmpfs: ["/tmp:size=16m"]
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     mem_limit: 128m
