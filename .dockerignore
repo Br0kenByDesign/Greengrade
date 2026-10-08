@@ -1,0 +1,7 @@
+.git
+.env
+secrets
+**/node_modules
+app/webui/dist
+app/web/public/icons
+app/web/src/design
