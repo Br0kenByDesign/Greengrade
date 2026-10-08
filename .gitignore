@@ -1,0 +1,10 @@
+.env
+secrets/
+node_modules/
+app/webui/dist/*
+!app/webui/dist/.gitkeep
+app/web/public/icons/
+app/web/public/favicon.svg
+app/web/src/design/
+landing/local/*
+!landing/local/.gitkeep
