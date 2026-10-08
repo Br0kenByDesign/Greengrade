@@ -1,0 +1,67 @@
+# ---------- Required ----------
+# Public address of the app, without trailing slash
+APP_ORIGIN=https://app.example.com
+# Passkey domain: the app's domain or a parent domain.
+# NEVER change this after users created passkeys - they would stop working.
+RP_ID=example.com
+
+# Generate each with: openssl rand -base64 32
+# APP_SECRET signs login tokens. Changing it only logs everyone out.
+APP_SECRET=
+# EMAIL_PEPPER turns e-mail addresses into fingerprints. NEVER change or lose it,
+# otherwise nobody can sign in by e-mail anymore. Keep a copy in a password manager.
+EMAIL_PEPPER=
+
+# Database password. Hex avoids URL escaping issues: openssl rand -hex 24
+POSTGRES_PASSWORD=
+
+# Docker network your reverse proxy is attached to (create it with: docker network create proxy)
+PROXY_NETWORK=proxy
+
+# ---------- Mail (required for sign-in links) ----------
+# smtp | graph (Microsoft 365) | log (development only: prints sign-in links to the log!)
+MAIL_PROVIDER=smtp
+MAIL_FROM=noreply@example.com
+
+# SMTP. Port 587 = STARTTLS, 465 = implicit TLS. Plain-text connections are refused.
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASSWORD=
+
+# Microsoft 365 via Graph (only if MAIL_PROVIDER=graph). MAIL_FROM is the sending mailbox.
+GRAPH_TENANT_ID=
+GRAPH_CLIENT_ID=
+# Preferred: certificate + key (put the files into ./secrets, mounted at /run/secrets)
+GRAPH_CERT_FILE=
+GRAPH_KEY_FILE=
+# Alternative: client secret
+GRAPH_CLIENT_SECRET=
+
+# ---------- Optional ----------
+# Comma separated e-mail addresses that get access to the moderation area
+ADMIN_EMAILS=
+# Receives a short notification for every report
+MODERATION_EMAIL=
+# Address of the landing page (used by the status page)
+LANDING_URL=https://example.com
+
+# Optional status page (Gatus, see gatus/config.yaml). Uncomment both lines to enable it.
+# COMPOSE_PROFILES=status
+# STATUS_URL=https://status.example.com
+
+# Shown at sign-up and on the login page
+PRIVACY_URL=https://example.com/datenschutz.html
+IMPRINT_URL=https://example.com/impressum.html
+
+# Social login - leave empty to disable a provider.
+# Redirect URI: <APP_ORIGIN>/api/auth/oauth/<google|github|discord>/callback
+OAUTH_GOOGLE_CLIENT_ID=
+OAUTH_GOOGLE_CLIENT_SECRET=
+OAUTH_GITHUB_CLIENT_ID=
+OAUTH_GITHUB_CLIENT_SECRET=
+OAUTH_DISCORD_CLIENT_ID=
+OAUTH_DISCORD_CLIENT_SECRET=
+
+# X-Forwarded-For is only trusted from these networks (default: private ranges and localhost)
+# TRUSTED_PROXIES=172.16.0.0/12
