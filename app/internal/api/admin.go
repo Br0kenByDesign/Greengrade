@@ -4,136 +4,12 @@ import (
 	"context"
 	"html"
 	"net/http"
-	"time"
 
 	"github.com/Br0kenByDesign/Greengrade/internal/security"
 	"github.com/jackc/pgx/v5"
 )
 
 func htmlEscape(s string) string { return html.EscapeString(s) }
-
-func (s *Server) handleAdminReports(w http.ResponseWriter, r *http.Request) {
-	status := r.URL.Query().Get("status")
-	if status != "hidden" && status != "dismissed" {
-		status = "open"
-	}
-	rows, err := s.db.Query(r.Context(), `SELECT rp.id, rp.target, rp.reason, rp.details, rp.created_at,
-		pr.id, s.id, s.name, pr.comment, pr.comment_hidden, pr.photo_id, pr.photo_hidden,
-		(SELECT count(*) FROM reports x WHERE x.public_rating_id=pr.id AND x.target=rp.target AND x.status='open')
-		FROM reports rp JOIN public_ratings pr ON pr.id=rp.public_rating_id JOIN strains s ON s.id=pr.strain_id
-		WHERE rp.status=$1 ORDER BY rp.created_at DESC LIMIT 200`, status)
-	if err != nil {
-		internal(w, err)
-		return
-	}
-	defer rows.Close()
-	out := []map[string]any{}
-	for rows.Next() {
-		var id, target, reason, details, rid, sid, sname string
-		var created time.Time
-		var comment, photo *string
-		var ch, ph bool
-		var n int
-		if err := rows.Scan(&id, &target, &reason, &details, &created, &rid, &sid, &sname, &comment, &ch, &photo, &ph, &n); err != nil {
-			internal(w, err)
-			return
-		}
-		out = append(out, map[string]any{"id": id, "target": target, "reason": reason, "reasonLabel": reportReasons[reason],
-			"details": details, "createdAt": created, "ratingId": rid, "strainId": sid, "strainName": sname,
-			"comment": comment, "commentHidden": ch, "photoId": photo, "photoHidden": ph, "openReports": n})
-	}
-	writeJSON(w, http.StatusOK, out)
-}
-
-// hideContent hides a comment or photo, closes open reports on it and informs the author in the app.
-func (s *Server) hideContent(ctx context.Context, ratingID, target, reason, note string) error {
-	tx, err := s.db.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-	col, what := "comment_hidden", "Dein Kommentar"
-	if target == "photo" {
-		col, what = "photo_hidden", "Dein Foto"
-	}
-	var uid, strain string
-	if err := tx.QueryRow(ctx, `UPDATE public_ratings pr SET `+col+`=true FROM strains s
-		WHERE pr.id=$1 AND s.id=pr.strain_id RETURNING pr.user_id, s.name`, ratingID).Scan(&uid, &strain); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(ctx, `UPDATE reports SET status='hidden', resolved_at=now() WHERE public_rating_id=$1 AND target=$2 AND status='open'`, ratingID, target); err != nil {
-		return err
-	}
-	body := "Grund: " + reason + "."
-	if note != "" {
-		body += " " + note
-	}
-	body += " Deine Note zählt weiterhin. Wenn du den Inhalt in deinem Eintrag änderst, wird er wieder angezeigt und kann erneut geprüft werden."
-	if _, err := tx.Exec(ctx, `INSERT INTO notices(user_id, title, body) VALUES ($1,$2,$3)`, uid, what+" zu "+strain+" wurde ausgeblendet", body); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
-}
-
-func (s *Server) handleAdminResolve(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r)
-	if !ok {
-		return
-	}
-	var in struct {
-		Action string `json:"action"`
-		Note   string `json:"note"`
-	}
-	if !readJSON(w, r, &in) {
-		return
-	}
-	ctx := r.Context()
-	var rid, target, reason string
-	if err := s.db.QueryRow(ctx, `SELECT public_rating_id, target, reason FROM reports WHERE id=$1`, id).Scan(&rid, &target, &reason); err != nil {
-		writeErr(w, err)
-		return
-	}
-	switch in.Action {
-	case "hide":
-		if err := s.hideContent(ctx, rid, target, reportReasons[reason], security.CleanText(in.Note, 300)); err != nil {
-			writeErr(w, err)
-			return
-		}
-	case "dismiss":
-		if _, err := s.db.Exec(ctx, `UPDATE reports SET status='dismissed', resolved_at=now() WHERE public_rating_id=$1 AND target=$2 AND status='open'`, rid, target); err != nil {
-			internal(w, err)
-			return
-		}
-	default:
-		writeErr(w, errBad("Unbekannte Aktion."))
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func (s *Server) handleAdminHide(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r)
-	if !ok {
-		return
-	}
-	var in struct {
-		Target string `json:"target"`
-		Reason string `json:"reason"`
-		Note   string `json:"note"`
-	}
-	if !readJSON(w, r, &in) {
-		return
-	}
-	if (in.Target != "comment" && in.Target != "photo") || reportReasons[in.Reason] == "" {
-		writeErr(w, errBad("Ungültige Angaben."))
-		return
-	}
-	if err := s.hideContent(r.Context(), id, in.Target, reportReasons[in.Reason], security.CleanText(in.Note, 300)); err != nil {
-		writeErr(w, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
 
 func (s *Server) handleAdminStrains(w http.ResponseWriter, r *http.Request) {
 	norm := NormalizeName(r.URL.Query().Get("q"))
@@ -168,23 +44,39 @@ func (s *Server) handleAdminStrainRename(w http.ResponseWriter, r *http.Request)
 	if !readJSON(w, r, &in) {
 		return
 	}
-	name := displayName(in.Name)
-	norm := NormalizeName(name)
-	if norm == "" {
-		writeErr(w, errBad("Bitte gib einen Namen ein."))
-		return
-	}
-	var other string
-	err := s.db.QueryRow(r.Context(), `SELECT id FROM strains WHERE name_norm=$1 AND id<>$2`, norm, id).Scan(&other)
-	if err == nil {
-		fail(w, http.StatusConflict, "Diese Sorte gibt es schon. Führe die beiden zusammen.")
-		return
-	}
-	if _, err := s.db.Exec(r.Context(), `UPDATE strains SET name=$2, name_norm=$3 WHERE id=$1`, id, name, norm); err != nil {
-		internal(w, err)
+	if err := s.renameStrain(r.Context(), id, in.Name, current(r).ID, ""); err != nil {
+		writeErr(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+var errStrainExists = errBad("Diese Sorte gibt es schon. Führe die beiden zusammen.")
+
+// renameStrain changes the public name of a strain and logs it.
+func (s *Server) renameStrain(ctx context.Context, id, newName, actorID, reason string) error {
+	name := displayName(newName)
+	norm := NormalizeName(name)
+	if norm == "" {
+		return errBad("Bitte gib einen Namen ein.")
+	}
+	if err := security.CheckStrainName(name); err != nil {
+		return errBad(err.Error())
+	}
+	return pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		var other string
+		if err := tx.QueryRow(ctx, `SELECT id FROM strains WHERE name_norm=$1 AND id<>$2`, norm, id).Scan(&other); err == nil {
+			return errStrainExists
+		}
+		var old string
+		if err := tx.QueryRow(ctx, `SELECT name FROM strains WHERE id=$1`, id).Scan(&old); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE strains SET name=$2, name_norm=$3 WHERE id=$1`, id, name, norm); err != nil {
+			return err
+		}
+		return logAction(ctx, tx, modAction{Action: "rename_strain", Reason: reason, StrainName: name, Content: &old, ActorID: actorID})
+	})
 }
 
 func (s *Server) handleAdminMerge(w http.ResponseWriter, r *http.Request) {
@@ -207,6 +99,11 @@ func (s *Server) handleAdminMerge(w http.ResponseWriter, r *http.Request) {
 		}
 		if n != 2 {
 			return pgx.ErrNoRows
+		}
+		var from, into string
+		tx.QueryRow(ctx, `SELECT (SELECT name FROM strains WHERE id=$1), (SELECT name FROM strains WHERE id=$2)`, in.FromID, in.IntoID).Scan(&from, &into)
+		if err := logAction(ctx, tx, modAction{Action: "merge_strain", StrainName: into, Content: &from, ActorID: current(r).ID}); err != nil {
+			return err
 		}
 		// a user with ratings on both keeps the newer one
 		if _, err := tx.Exec(ctx, `DELETE FROM public_ratings a USING public_ratings b

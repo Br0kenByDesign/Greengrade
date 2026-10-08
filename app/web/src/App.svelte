@@ -18,6 +18,7 @@
   import Account from './pages/Account.svelte';
   import Admin from './pages/Admin.svelte';
   import NotFound from './pages/NotFound.svelte';
+  import ReauthDialog from './components/ReauthDialog.svelte';
 
   const routes = [
     ['/', Dashboard], ['/entries/new', EntryForm], ['/entries/:id/edit', EntryForm], ['/entries/:id', EntryDetail],
@@ -81,5 +82,7 @@
     </nav>
   </div>
 {/if}
+
+<ReauthDialog />
 
 {#if toast.text}<div class="toast" role="status">{toast.text}</div>{/if}

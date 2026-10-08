@@ -89,6 +89,10 @@ func (s *Server) loadCeremony(w http.ResponseWriter, r *http.Request, mode strin
 	if err != nil || c.Mode != mode {
 		return nil, nil, errors.New("bad ceremony")
 	}
+	// each ceremony can be completed only once, even if the cookie was copied
+	if ok, err := s.markUsed(r.Context(), "wa:"+c.ID, c.ExpiresAt.Time); err != nil || !ok {
+		return nil, nil, errors.New("ceremony used")
+	}
 	var sess webauthn.SessionData
 	if err := json.Unmarshal(c.Data, &sess); err != nil {
 		return nil, nil, err
@@ -97,7 +101,8 @@ func (s *Server) loadCeremony(w http.ResponseWriter, r *http.Request, mode strin
 }
 
 func (s *Server) handlePasskeyLoginBegin(w http.ResponseWriter, r *http.Request) {
-	opts, sess, err := s.wa.BeginDiscoverableLogin(webauthn.WithUserVerification(protocol.VerificationPreferred))
+	// the passkey is the only factor, so PIN or biometrics are mandatory
+	opts, sess, err := s.wa.BeginDiscoverableLogin(webauthn.WithUserVerification(protocol.VerificationRequired))
 	if err != nil {
 		internal(w, err)
 		return
@@ -133,14 +138,16 @@ func (s *Server) handlePasskeyLoginFinish(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if cred.Authenticator.CloneWarning {
-		slog.Warn("passkey: möglicher Klon erkannt (Signaturzähler)")
+		s.rejectClone(ctx, uid, cred.ID)
+		fail(w, http.StatusUnauthorized, "Dieser Passkey wurde zur Sicherheit gesperrt, weil er möglicherweise kopiert wurde. Melde dich per Link an und lege einen neuen an.")
+		return
 	}
 	raw, _ := json.Marshal(cred)
 	if _, err := s.db.Exec(ctx, `UPDATE passkeys SET credential=$2, last_used_at=now() WHERE id=$1`, cred.ID, raw); err != nil {
 		internal(w, err)
 		return
 	}
-	if err := s.startSession(w, uid); err != nil {
+	if err := s.startSession(w, uid, time.Now()); err != nil {
 		internal(w, err)
 		return
 	}
@@ -163,7 +170,11 @@ func (s *Server) handlePasskeyRegisterBegin(w http.ResponseWriter, r *http.Reque
 		excl = append(excl, wu.creds[i].Descriptor())
 	}
 	opts, sess, err := s.wa.BeginRegistration(wu,
-		webauthn.WithResidentKeyRequirement(protocol.ResidentKeyRequirementRequired),
+		webauthn.WithAuthenticatorSelection(protocol.AuthenticatorSelection{
+			ResidentKey:        protocol.ResidentKeyRequirementRequired,
+			RequireResidentKey: protocol.ResidentKeyRequired(),
+			UserVerification:   protocol.VerificationRequired,
+		}),
 		webauthn.WithExclusions(excl))
 	if err != nil {
 		internal(w, err)
@@ -205,7 +216,77 @@ func (s *Server) handlePasskeyRegisterFinish(w http.ResponseWriter, r *http.Requ
 		internal(w, err)
 		return
 	}
+	s.db.Exec(ctx, `INSERT INTO notices(user_id, title, body) VALUES ($1,$2,$3)`, u.ID, "Neuer Passkey: "+name,
+		"Angelegt am "+time.Now().Format("02.01.2006 um 15:04")+" Uhr. Warst du das nicht? Entferne den Passkey unter Konto und melde dich überall ab.")
 	writeJSON(w, http.StatusOK, map[string]string{"id": base64.RawURLEncoding.EncodeToString(cred.ID), "name": name})
+}
+
+// rejectClone removes a passkey whose signature counter went backwards and tells the owner.
+func (s *Server) rejectClone(ctx context.Context, uid string, credID []byte) {
+	slog.Warn("passkey: möglicher Klon erkannt, Passkey entfernt")
+	var name string
+	if err := s.db.QueryRow(ctx, `DELETE FROM passkeys WHERE id=$1 AND user_id=$2 RETURNING name`, credID, uid).Scan(&name); err == nil {
+		s.db.Exec(ctx, `INSERT INTO notices(user_id, title, body) VALUES ($1,$2,$3)`, uid, "Passkey „"+name+"“ wurde gesperrt",
+			"Er hat sich so verhalten, als wäre er kopiert worden, und wurde deshalb entfernt. Lege bei Bedarf einen neuen an und melde dich zur Sicherheit überall ab.")
+	}
+}
+
+// ---------- confirming a signed-in account (step-up) ----------
+
+func (s *Server) handleReauthPasskeyBegin(w http.ResponseWriter, r *http.Request) {
+	u := current(r)
+	wu, err := s.loadWAUser(r.Context(), u.ID)
+	if err != nil {
+		internal(w, err)
+		return
+	}
+	if len(wu.creds) == 0 {
+		writeErr(w, errBad("Für dieses Konto gibt es keinen Passkey."))
+		return
+	}
+	opts, sess, err := s.wa.BeginLogin(wu, webauthn.WithUserVerification(protocol.VerificationRequired))
+	if err != nil {
+		internal(w, err)
+		return
+	}
+	if err := s.saveCeremony(w, "reauth", u.ID, sess); err != nil {
+		internal(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, opts)
+}
+
+func (s *Server) handleReauthPasskeyFinish(w http.ResponseWriter, r *http.Request) {
+	u, ctx := current(r), r.Context()
+	c, sess, err := s.loadCeremony(w, r, "reauth")
+	if err != nil || c.Subject != u.ID {
+		fail(w, http.StatusBadRequest, "Die Bestätigung ist abgelaufen. Bitte versuche es erneut.")
+		return
+	}
+	wu, err := s.loadWAUser(ctx, u.ID)
+	if err != nil {
+		internal(w, err)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
+	cred, err := s.wa.FinishLogin(wu, *sess, r)
+	if err != nil {
+		slog.Info("passkey-bestätigung abgelehnt", "err", err)
+		fail(w, http.StatusUnauthorized, "Der Passkey passt nicht zu diesem Konto.")
+		return
+	}
+	if cred.Authenticator.CloneWarning {
+		s.rejectClone(ctx, u.ID, cred.ID)
+		fail(w, http.StatusUnauthorized, "Dieser Passkey wurde zur Sicherheit gesperrt, weil er möglicherweise kopiert wurde.")
+		return
+	}
+	raw, _ := json.Marshal(cred)
+	s.db.Exec(ctx, `UPDATE passkeys SET credential=$2, last_used_at=now() WHERE id=$1 AND user_id=$3`, cred.ID, raw, u.ID)
+	if err := s.startSession(w, u.ID, time.Now()); err != nil {
+		internal(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // loginMethods counts how a user can still sign in (passkeys, social logins, e-mail).

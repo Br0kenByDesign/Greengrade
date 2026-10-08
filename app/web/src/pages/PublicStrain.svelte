@@ -17,7 +17,8 @@
   async function adminHide(ratingId, target) {
     const note = prompt('Begründung für die Person (optional):', '');
     if (note === null) return;
-    try { await api(`/api/admin/ratings/${ratingId}/hide`, { method: 'POST', body: { target, reason: 'other', note } }); notify('Ausgeblendet.'); sel = 0; load(); } catch (e) { err = e.message; }
+    const ban = confirm('Zusätzlich das öffentliche Teilen für dieses Konto sperren?\n\nOK = ausblenden und sperren, Abbrechen = nur ausblenden');
+    try { await api(`/api/admin/ratings/${ratingId}/hide`, { method: 'POST', body: { target, reason: 'other', note, ban } }); notify('Ausgeblendet.'); sel = 0; load(); } catch (e) { err = e.message; }
   }
 </script>
 
@@ -36,7 +37,7 @@
     </div>
     <div>
       <div class="dtitle">
-        <div><h1>{s.name}</h1><p class="muted" style="margin-top:6px">{s.count} öffentliche Bewertung{s.count === 1 ? '' : 'en'}{s.since ? ` seit ${month(s.since)}` : ''}</p></div>
+        <div><h1>{s.name}</h1><p class="muted" style="margin-top:6px">{s.count} öffentliche Bewertung{s.count === 1 ? '' : 'en'}{s.since ? ` seit ${month(s.since)}` : ''} <button class="linkbtn" onclick={() => (report = { strainId: s.id, target: 'name' })}>Name melden</button></p></div>
         <Ring value={s.avg} label="Ø von 10" />
       </div>
       {#if s.mine}<div class="mine"><span>Deine Bewertung: <b>{score(s.mine.overall)}</b></span><a class="btn btn-ghost" style="background:var(--bg)" href="/entries/{s.mine.entryId}">Zu deinem Eintrag</a></div>{/if}

@@ -1,5 +1,6 @@
 import { session } from './session.svelte.js';
 import { go } from './router.svelte.js';
+import { requestReauth } from './reauth.svelte.js';
 
 export class ApiError extends Error {
   constructor(status, message) { super(message); this.status = status; }
@@ -24,6 +25,14 @@ export async function api(path, { method = 'GET', body, form } = {}) {
       throw new ApiError(401, 'Bitte melde dich an.');
     }
   }
+  if (res.status === 403) {
+    let data = {};
+    try { data = await res.clone().json(); } catch {}
+    if (data.reauth) {
+      try { await requestReauth(); } catch { throw new ApiError(403, 'Bestätigung abgebrochen.'); }
+      res = await fetch(path, opts);
+    }
+  }
   if (!res.ok) {
     let msg = 'Da ist etwas schiefgelaufen. Bitte versuche es erneut.';
     try { msg = (await res.json()).error || msg; } catch {}
@@ -38,5 +47,8 @@ export async function loadMe() {
   session.loaded = true;
   return session.me;
 }
+
+// Makes sure a recent sign-in exists before leaving the app (download, social login).
+export const ensureFresh = () => api('/api/me/fresh');
 
 export const photoURL = (id, thumb = true) => `/api/photos/${id}${thumb ? '?size=thumb' : ''}`;

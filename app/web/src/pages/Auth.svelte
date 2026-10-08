@@ -8,7 +8,7 @@
   import Icon from '../components/Icon.svelte';
 
   const PENDING = 'gg-pending-login';
-  let step = $state('start'), email = $state(''), busy = $state(false), err = $state(''), info = $state('');
+  let step = $state('start'), email = $state(''), emailHint = $state(''), busy = $state(false), err = $state(''), info = $state('');
   let token = $state(''), name = $state(''), age = $state(false), consent = $state(false), countdown = $state(0);
   let code = $state('');
   let providers = $state([]), privacyUrl = $state(''), imprintUrl = $state('');
@@ -20,14 +20,20 @@
   else {
     // came back to the app after reading the mail (e.g. installed app on iOS): show the code field again
     try {
+      // only a masked hint is stored (m•••@posteo.de), never the address itself
       const p = JSON.parse(localStorage.getItem(PENDING));
-      if (p && Date.now() - p.at < 10 * 60000) { email = p.email; step = 'sent'; }
+      if (p && Date.now() - p.at < 10 * 60000) { emailHint = p.hint || ''; step = 'sent'; }
+      else if (p) localStorage.removeItem(PENDING);
     } catch {}
   }
   if (route.query.get('fehler')) err = 'Die Anmeldung beim Anbieter hat nicht geklappt. Bitte versuche es erneut.';
 
   api('/api/auth/config').then(c => { providers = c.providers; privacyUrl = c.privacyUrl; imprintUrl = c.imprintUrl; }).catch(() => {});
 
+  function maskEmail(e) {
+    const [local, domain] = e.trim().toLowerCase().split('@');
+    return local && domain ? `${local[0]}•••@${domain}` : '';
+  }
   function clearPending() { try { localStorage.removeItem(PENDING); } catch {} }
   async function afterLogin() {
     clearPending();
@@ -44,7 +50,8 @@
     const pow = await solve(ch);
     info = '';
     await api('/api/auth/magic', { method: 'POST', body: { email, pow } });
-    try { localStorage.setItem(PENDING, JSON.stringify({ email, at: Date.now() })); } catch {}
+    emailHint = maskEmail(email);
+    try { localStorage.setItem(PENDING, JSON.stringify({ hint: emailHint, at: Date.now() })); } catch {}
     code = ''; step = 'sent'; startCountdown();
   }).finally(() => (info = '')); };
   function startCountdown() { countdown = 60; const t = setInterval(() => { if (--countdown <= 0) clearInterval(t); }, 1000); }
@@ -101,7 +108,7 @@
     {:else if step === 'sent'}
       <div class="mailicon"><Icon name="mail" size={26} /></div>
       <h2>Schau in dein Postfach</h2>
-      <p class="muted">Wir haben einen Anmeldelink an <b style="color:var(--ink)">{email}</b> geschickt. Er ist 10 Minuten gültig und funktioniert einmal.</p>
+      <p class="muted">Wir haben einen Anmeldelink an <b style="color:var(--ink)">{email || emailHint || 'deine Adresse'}</b> geschickt. Er ist 10 Minuten gültig und funktioniert einmal.</p>
       <form class="codebox" onsubmit={verifyCode}>
         <label class="flabel" for="a-code" style="margin:0">Oder gib den Code aus der Mail hier ein</label>
         <div class="field"><input id="a-code" bind:value={code} inputmode="text" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" maxlength="7" placeholder="ABC-123" required></div>
@@ -109,7 +116,7 @@
       </form>
       {#if err}<p class="err" style="margin-top:16px">{err}</p>{/if}
       <div class="stack" style="margin-top:14px">
-        <button class="btn btn-ghost" disabled={countdown > 0 || busy} onclick={sendLink}>{countdown > 0 ? `Erneut senden in 0:${String(countdown).padStart(2, '0')}` : 'Erneut senden'}</button>
+        <button class="btn btn-ghost" disabled={countdown > 0 || busy} onclick={e => (email ? sendLink(e) : otherAddress())}>{countdown > 0 ? `Erneut senden in 0:${String(countdown).padStart(2, '0')}` : 'Erneut senden'}</button>
       </div>
       <small>Der Code funktioniert nur auf diesem Gerät. <button class="linkbtn" onclick={otherAddress}>Andere Adresse verwenden</button></small>
     {:else if step === 'verify'}

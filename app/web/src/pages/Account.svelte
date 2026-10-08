@@ -1,5 +1,5 @@
 <script>
-  import { api, loadMe } from '../lib/api.js';
+  import { api, loadMe, ensureFresh } from '../lib/api.js';
   import { session } from '../lib/session.svelte.js';
   import { route, go } from '../lib/router.svelte.js';
   import { date } from '../lib/format.js';
@@ -13,8 +13,14 @@
   let err = $state(''), name = $state(session.me.displayName), confirmText = $state(''), showDelete = $state(false);
   let theme = $state(localStorage.getItem('gg-theme') || 'system');
   const me = $derived(session.me);
-  const msg = { vergeben: 'Dieses Konto ist schon mit einem anderen greengrade-Konto verknüpft.', vorhanden: 'Du hast bei diesem Anbieter schon ein anderes Konto verknüpft.' }[route.query.get('fehler')];
+  const msg = {
+    vergeben: 'Dieses Konto ist schon mit einem anderen greengrade-Konto verknüpft.',
+    vorhanden: 'Du hast bei diesem Anbieter schon ein anderes Konto verknüpft.',
+    bestaetigen: 'Bitte bestätige zuerst kurz, dass du es bist, und versuche es dann noch einmal.',
+    bestaetigung: 'Die Bestätigung hat nicht geklappt. Nutze eine Anmeldung, die mit diesem Konto verknüpft ist.'
+  }[route.query.get('fehler')];
   if (route.query.get('verknuepft')) notify('Anmeldung verknüpft.');
+  if (route.query.get('bestaetigt')) notify('Bestätigt. Du kannst jetzt fortfahren.');
   if (me.notices.some(n => !n.read)) api('/api/me/notices/read', { method: 'POST' }).then(loadMe).catch(() => {});
 
   async function run(fn, ok) { err = ''; try { await fn(); if (ok) notify(ok); await loadMe(); } catch (e) { if (e?.name !== 'NotAllowedError') err = e.message; } }
@@ -26,6 +32,9 @@
     try { await api(all ? '/api/me/logout-all' : '/api/auth/logout', { method: 'POST' }); } catch {}
     session.me = null; go('/login', { replace: true });
   }
+  // these leave the app, so the confirmation happens before
+  async function exportData() { try { await ensureFresh(); location.href = '/api/me/export'; } catch (e) { err = e.message; } }
+  async function link(id) { try { await ensureFresh(); location.href = `/api/auth/oauth/${id}/start?mode=link`; } catch (e) { err = e.message; } }
   async function deleteAccount() {
     try { await api('/api/me', { method: 'DELETE', body: { confirm: confirmText } }); session.me = null; localStorage.clear(); go('/login', { replace: true }); }
     catch (e) { err = e.message; }
@@ -41,6 +50,10 @@
   <h1>Konto</h1>
   <p class="muted" style="margin-top:6px">Angemeldet als {me.displayName}. {me.hasEmail ? 'Deine E-Mail-Adresse kennen wir nur als Fingerabdruck.' : ''}</p>
   {#if err || msg}<p class="err" style="margin-top:16px">{err || msg}</p>{/if}
+
+  {#if me.shareBanned}
+    <div class="notice" style="margin-top:20px;border-color:var(--danger)"><b style="font-weight:500">Öffentliches Teilen ist für dein Konto gesperrt</b><span class="muted">{me.shareBanReason ? `Grund: ${me.shareBanReason}. ` : ''}Dein privates Logbuch kannst du weiter wie gewohnt nutzen.</span></div>
+  {/if}
 
   {#if me.notices.length}
     <div class="sgroup">
@@ -73,7 +86,7 @@
       {#each me.providers as p}
         {@const linked = me.identities.includes(p.id)}
         <div class="srow"><div class="l"><span class="ico">{p.label[0]}</span><div>{p.label}<small>{linked ? 'Verknüpft' : 'Nicht verknüpft'}</small></div></div>
-          {#if linked}<button class="linkbtn" onclick={() => unlink(p.id)}>Trennen</button>{:else}<button class="btn btn-line" onclick={() => (location.href = `/api/auth/oauth/${p.id}/start?mode=link`)}>Verknüpfen</button>{/if}
+          {#if linked}<button class="linkbtn" onclick={() => unlink(p.id)}>Trennen</button>{:else}<button class="btn btn-line" onclick={() => link(p.id)}>Verknüpfen</button>{/if}
         </div>
       {/each}
     </div>
@@ -95,7 +108,7 @@
     <h2>Sicherheit und Daten</h2>
     <div class="srow"><div class="l"><div>Abmelden<small>Nur auf diesem Gerät.</small></div></div><button class="btn btn-line" onclick={() => logout(false)}>Abmelden</button></div>
     <div class="srow"><div class="l"><div>Überall abmelden<small>Beendet die Anmeldung auf allen Geräten, auch diesem.</small></div></div><button class="btn btn-line" onclick={() => logout(true)}>Überall abmelden</button></div>
-    <div class="srow"><div class="l"><div>Daten exportieren<small>Alle Einträge, Grows und Fotos als ZIP mit JSON-Datei.</small></div></div><a class="btn btn-line" href="/api/me/export" download>Export laden</a></div>
+    <div class="srow"><div class="l"><div>Daten exportieren<small>Alle Einträge, Grows und Fotos als ZIP mit JSON-Datei.</small></div></div><button class="btn btn-line" onclick={exportData}>Export laden</button></div>
   </div>
 
   <div class="sgroup">

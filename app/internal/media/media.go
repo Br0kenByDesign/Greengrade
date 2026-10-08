@@ -5,6 +5,8 @@ package media
 
 import (
 	"bytes"
+	"context"
+	"crypto/sha256"
 	"errors"
 	"image"
 	"image/draw"
@@ -15,21 +17,40 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 const (
 	MaxUploadBytes = 15 << 20
-	maxPixels      = 50_000_000
+	maxPixels      = 24_000_000 // 6000x4000, enough for any phone camera; decoding needs ~4 bytes per pixel
 	FullEdge       = 2048
 	ThumbEdge      = 560
 )
 
+// Only a few images are decoded at the same time, so parallel uploads cannot exhaust memory.
+var slots = make(chan struct{}, 2)
+
+var ErrBusy = errors.New("Gerade werden viele Fotos verarbeitet. Bitte versuche es in einem Moment noch einmal.")
+
+// Acquire reserves a processing slot (waits up to 20 seconds). Call the returned release when done.
+func Acquire(ctx context.Context) (release func(), err error) {
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	select {
+	case slots <- struct{}{}:
+		return func() { <-slots }, nil
+	case <-ctx.Done():
+		return nil, ErrBusy
+	}
+}
+
 var ErrUnsupported = errors.New("Nur JPEG- und PNG-Bilder werden unterstützt.")
-var ErrTooLarge = errors.New("Das Bild ist zu groß.")
+var ErrTooLarge = errors.New("Das Bild ist zu groß. Erlaubt sind höchstens 15 MB und 24 Megapixel.")
 
 type Result struct {
 	Full, Thumb   []byte
 	Width, Height int
+	Hash          []byte // SHA-256 of the re-encoded full image, used by moderation
 }
 
 func Process(r io.Reader) (*Result, error) {
@@ -71,6 +92,8 @@ func Process(r io.Reader) (*Result, error) {
 		return nil, err
 	}
 	res.Full, res.Thumb = b1.Bytes(), b2.Bytes()
+	sum := sha256.Sum256(res.Full)
+	res.Hash = sum[:]
 	return res, nil
 }
 

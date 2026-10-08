@@ -31,6 +31,8 @@ type Claims struct {
 	jwt.RegisteredClaims
 	Typ string `json:"typ"`
 
+	AuthAt int64 `json:"aat,omitempty"` // access, refresh: time of the last real sign-in (not refresh)
+
 	EmailHash string          `json:"eh,omitempty"`  // magic, signup
 	Provider  string          `json:"prv,omitempty"` // signup, oauth
 	ProvSub   string          `json:"psb,omitempty"` // signup

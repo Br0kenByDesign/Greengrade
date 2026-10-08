@@ -209,6 +209,23 @@ func CleanText(s string, max int) string {
 	return s
 }
 
+var ErrStrainChars = errors.New("Sortennamen dürfen nur Buchstaben, Ziffern, Leerzeichen und # + - . ' & ( ) / ! enthalten.")
+var ErrStrainName = errors.New("Sortennamen dürfen keine Links, Telefonnummern, Nutzernamen oder Kontakt- und Verkaufsangebote enthalten.")
+
+// CheckStrainName applies to names that become visible to everyone (strain catalogue).
+func CheckStrainName(s string) error {
+	for _, r := range s {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == ' ' || strings.ContainsRune("#+-.'&()/!", r) {
+			continue
+		}
+		return ErrStrainChars
+	}
+	if CheckPublicComment(s) != nil {
+		return ErrStrainName
+	}
+	return nil
+}
+
 func CheckPublicComment(s string) error {
 	if reURL.MatchString(s) || rePhone.MatchString(s) || reHandle.MatchString(s) || reContact.MatchString(s) {
 		return ErrComment

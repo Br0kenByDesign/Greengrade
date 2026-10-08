@@ -95,13 +95,16 @@ func (s *Server) Handler() http.Handler {
 	// account
 	m.HandleFunc("GET /api/me", s.auth(s.handleMe))
 	m.HandleFunc("PATCH /api/me", s.auth(s.handleMeUpdate))
-	m.HandleFunc("DELETE /api/me", s.auth(s.handleDeleteAccount))
+	m.HandleFunc("DELETE /api/me", s.fresh(s.handleDeleteAccount))
 	m.HandleFunc("POST /api/me/logout-all", s.auth(s.handleLogoutAll))
-	m.HandleFunc("GET /api/me/export", s.auth(s.handleExport))
-	m.HandleFunc("POST /api/me/passkeys/begin", s.auth(s.handlePasskeyRegisterBegin))
+	m.HandleFunc("GET /api/me/export", s.fresh(s.handleExport))
+	m.HandleFunc("GET /api/me/fresh", s.fresh(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	m.HandleFunc("POST /api/me/reauth/passkey/begin", s.auth(s.limit(s.handleReauthPasskeyBegin)))
+	m.HandleFunc("POST /api/me/reauth/passkey/finish", s.auth(s.limit(s.handleReauthPasskeyFinish)))
+	m.HandleFunc("POST /api/me/passkeys/begin", s.fresh(s.handlePasskeyRegisterBegin))
 	m.HandleFunc("POST /api/me/passkeys/finish", s.auth(s.handlePasskeyRegisterFinish))
-	m.HandleFunc("DELETE /api/me/passkeys/{id}", s.auth(s.handlePasskeyDelete))
-	m.HandleFunc("DELETE /api/me/identities/{provider}", s.auth(s.handleIdentityDelete))
+	m.HandleFunc("DELETE /api/me/passkeys/{id}", s.fresh(s.handlePasskeyDelete))
+	m.HandleFunc("DELETE /api/me/identities/{provider}", s.fresh(s.handleIdentityDelete))
 	m.HandleFunc("POST /api/me/notices/read", s.auth(s.handleNoticesRead))
 
 	// private log
@@ -137,6 +140,9 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("GET /api/admin/reports", s.admin(s.handleAdminReports))
 	m.HandleFunc("POST /api/admin/reports/{id}", s.admin(s.handleAdminResolve))
 	m.HandleFunc("POST /api/admin/ratings/{id}/hide", s.admin(s.handleAdminHide))
+	m.HandleFunc("GET /api/admin/bans", s.admin(s.handleAdminBans))
+	m.HandleFunc("POST /api/admin/users/{id}/unban", s.admin(s.handleAdminUnban))
+	m.HandleFunc("GET /api/admin/log", s.admin(s.handleAdminLog))
 	m.HandleFunc("GET /api/admin/strains", s.admin(s.handleAdminStrains))
 	m.HandleFunc("PATCH /api/admin/strains/{id}", s.admin(s.handleAdminStrainRename))
 	m.HandleFunc("POST /api/admin/strains/merge", s.admin(s.handleAdminMerge))
@@ -256,6 +262,7 @@ type user struct {
 	Name    string
 	Admin   bool
 	HasMail bool
+	AuthAt  time.Time // last real sign-in; refreshing tokens keeps it
 }
 
 type ctxKey struct{}
@@ -278,6 +285,9 @@ func (s *Server) loadUser(ctx context.Context, raw string, typ string) (*user, e
 	if c.IssuedAt == nil || c.IssuedAt.Time.Before(tva) {
 		return nil, security.ErrInvalidToken
 	}
+	if c.AuthAt > 0 {
+		u.AuthAt = time.Unix(c.AuthAt, 0)
+	}
 	return u, nil
 }
 
@@ -295,6 +305,23 @@ func (s *Server) auth(h http.HandlerFunc) http.HandlerFunc {
 		}
 		h(w, r.WithContext(context.WithValue(r.Context(), ctxKey{}, u)))
 	}
+}
+
+// freshWindow: sensitive actions need a sign-in that is at most this old.
+const freshWindow = 10 * time.Minute
+
+func isFresh(u *user) bool { return time.Since(u.AuthAt) <= freshWindow }
+
+// fresh protects sensitive actions (passkeys, linked accounts, export, deletion).
+// The web app answers a 403 with "reauth" by asking for a quick confirmation and retrying.
+func (s *Server) fresh(h http.HandlerFunc) http.HandlerFunc {
+	return s.auth(func(w http.ResponseWriter, r *http.Request) {
+		if !isFresh(current(r)) {
+			writeJSON(w, http.StatusForbidden, map[string]any{"error": "Bitte bestätige kurz, dass du es bist.", "reauth": true})
+			return
+		}
+		h(w, r)
+	})
 }
 
 func (s *Server) admin(h http.HandlerFunc) http.HandlerFunc {
@@ -316,7 +343,7 @@ const (
 	cookieOAuth     = "__Host-gg_oa"
 	cookieLoginCode = "__Host-gg_lc"
 	accessTTL       = 15 * time.Minute
-	refreshTTL      = 30 * 24 * time.Hour
+	refreshTTL      = 14 * 24 * time.Hour
 )
 
 func (s *Server) setCookie(w http.ResponseWriter, name, value string, ttl time.Duration) {
@@ -330,12 +357,13 @@ func (s *Server) clearCookie(w http.ResponseWriter, name string) {
 	http.SetCookie(w, &http.Cookie{Name: name, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: s.cfg.Secure, SameSite: http.SameSiteLaxMode})
 }
 
-func (s *Server) startSession(w http.ResponseWriter, userID string) error {
-	at, err := s.tokens.Sign(security.Claims{Typ: security.TypAccess, RegisteredClaims: subject(userID)}, accessTTL)
+// startSession issues new tokens. authAt is now for a real sign-in and the original time on refresh.
+func (s *Server) startSession(w http.ResponseWriter, userID string, authAt time.Time) error {
+	at, err := s.tokens.Sign(security.Claims{Typ: security.TypAccess, AuthAt: authAt.Unix(), RegisteredClaims: subject(userID)}, accessTTL)
 	if err != nil {
 		return err
 	}
-	rt, err := s.tokens.Sign(security.Claims{Typ: security.TypRefresh, RegisteredClaims: subject(userID)}, refreshTTL)
+	rt, err := s.tokens.Sign(security.Claims{Typ: security.TypRefresh, AuthAt: authAt.Unix(), RegisteredClaims: subject(userID)}, refreshTTL)
 	if err != nil {
 		return err
 	}

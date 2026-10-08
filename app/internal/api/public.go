@@ -1,14 +1,9 @@
 package api
 
 import (
-	"context"
-	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
-
-	"github.com/Br0kenByDesign/Greengrade/internal/mail"
-	"github.com/Br0kenByDesign/Greengrade/internal/security"
 )
 
 func (s *Server) handlePublicList(w http.ResponseWriter, r *http.Request) {
@@ -138,62 +133,4 @@ func (s *Server) handlePublicStrain(w http.ResponseWriter, r *http.Request) {
 		"categories": map[string]*float64{"smell": sm, "taste": ta, "look": lo, "effect": ef, "quality": qu},
 		"histogram":  hist, "comments": comments, "photos": photos, "mine": mine,
 	})
-}
-
-var reportReasons = map[string]string{
-	"sale":     "Verkaufs- oder Tauschangebot",
-	"personal": "Persönliche Daten zu sehen",
-	"abuse":    "Beleidigend oder hetzerisch",
-	"spam":     "Spam oder Werbung",
-	"other":    "Anderer Grund",
-}
-
-func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
-	var in struct {
-		RatingID string `json:"ratingId"`
-		Target   string `json:"target"`
-		Reason   string `json:"reason"`
-		Details  string `json:"details"`
-	}
-	if !readJSON(w, r, &in) {
-		return
-	}
-	if !validUUID(in.RatingID) || (in.Target != "comment" && in.Target != "photo") || reportReasons[in.Reason] == "" {
-		writeErr(w, errBad("Ungültige Meldung."))
-		return
-	}
-	u, ctx := current(r), r.Context()
-	if ok, err := s.rateOK(ctx, "report:"+u.ID, 20, 24*time.Hour); err != nil {
-		internal(w, err)
-		return
-	} else if !ok {
-		fail(w, http.StatusTooManyRequests, "Du hast heute schon viele Meldungen geschickt. Danke! Bitte versuche es morgen wieder.")
-		return
-	}
-	var strain string
-	err := s.db.QueryRow(ctx, `INSERT INTO reports(public_rating_id, target, reason, details, reporter_id)
-		SELECT pr.id, $2, $3, $4, $5 FROM public_ratings pr WHERE pr.id=$1
-		AND NOT EXISTS (SELECT 1 FROM reports x WHERE x.public_rating_id=pr.id AND x.target=$2 AND x.reporter_id=$5 AND x.status='open')
-		RETURNING (SELECT st.name FROM strains st JOIN public_ratings x ON x.strain_id=st.id WHERE x.id=$1)`,
-		in.RatingID, in.Target, in.Reason, security.CleanText(in.Details, 500), u.ID).Scan(&strain)
-	if err != nil && !notFound(err) {
-		internal(w, err)
-		return
-	}
-	if err == nil && s.cfg.ModerationMail != "" {
-		go func(strain, reason string) {
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			link := s.cfg.AppOrigin + "/admin"
-			if err := s.mail.Send(ctx, mail.Message{
-				To:      s.cfg.ModerationMail,
-				Subject: "greengrade: neue Meldung",
-				Text:    "Neue Meldung zu " + strain + " (" + reason + ").\n\nPrüfen: " + link,
-				HTML:    "<p>Neue Meldung zu <b>" + htmlEscape(strain) + "</b> (" + htmlEscape(reason) + ").</p><p><a href=\"" + link + "\">Meldungen prüfen</a></p>",
-			}); err != nil {
-				slog.Error("meldungs-mail fehlgeschlagen", "err", err)
-			}
-		}(strain, reportReasons[in.Reason])
-	}
-	w.WriteHeader(http.StatusNoContent)
 }

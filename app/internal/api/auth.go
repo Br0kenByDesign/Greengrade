@@ -57,8 +57,9 @@ func (s *Server) handleChallenge(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleMagicRequest(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Email string `json:"email"`
-		PoW   string `json:"pow"`
+		Email  string `json:"email"`
+		PoW    string `json:"pow"`
+		Reauth bool   `json:"reauth"` // confirm a signed-in account (code is only sent if the address matches)
 	}
 	if !readJSON(w, r, &in) {
 		return
@@ -84,6 +85,23 @@ func (s *Server) handleMagicRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	eh := s.emails.Hash(email)
 	ehHex := hex.EncodeToString(eh)
+	reauthMismatch := false
+	if in.Reauth {
+		ck, err := r.Cookie(cookieAccess)
+		if err != nil {
+			fail(w, http.StatusUnauthorized, "Bitte melde dich an.")
+			return
+		}
+		u, err := s.loadUser(ctx, ck.Value, security.TypAccess)
+		if err != nil {
+			fail(w, http.StatusUnauthorized, "Bitte melde dich an.")
+			return
+		}
+		var own []byte
+		s.db.QueryRow(ctx, `SELECT email_hmac FROM users WHERE id=$1`, u.ID).Scan(&own)
+		// no hint whether the address matches: same answer, mail only for the right one
+		reauthMismatch = !hmac.Equal(own, eh)
+	}
 	ip := s.ips.LimitKey(r)
 	for _, l := range []struct {
 		key    string
@@ -103,6 +121,10 @@ func (s *Server) handleMagicRequest(w http.ResponseWriter, r *http.Request) {
 			fail(w, http.StatusTooManyRequests, "Es wurden schon mehrere Links angefordert. Bitte warte etwas und schau in dein Postfach.")
 			return
 		}
+	}
+	if reauthMismatch {
+		w.WriteHeader(http.StatusNoContent)
+		return
 	}
 	id := security.RandomID(16)
 	exp := time.Now().Add(10 * time.Minute)
@@ -230,7 +252,7 @@ func (s *Server) finishEmailLogin(w http.ResponseWriter, ctx context.Context, eh
 	var uid string
 	err := s.db.QueryRow(ctx, `UPDATE users SET is_admin=$2 WHERE email_hmac=$1 RETURNING id`, eh, s.admins[string(eh)]).Scan(&uid)
 	if err == nil {
-		if err := s.startSession(w, uid); err != nil {
+		if err := s.startSession(w, uid, time.Now()); err != nil {
 			internal(w, err)
 			return
 		}
@@ -324,7 +346,7 @@ func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
 		internal(w, err)
 		return
 	}
-	if err := s.startSession(w, uid); err != nil {
+	if err := s.startSession(w, uid, time.Now()); err != nil {
 		internal(w, err)
 		return
 	}
@@ -336,7 +358,7 @@ func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		var u *user
 		if u, err = s.loadUser(r.Context(), ck.Value, security.TypRefresh); err == nil {
-			if err = s.startSession(w, u.ID); err == nil {
+			if err = s.startSession(w, u.ID, u.AuthAt); err == nil {
 				w.WriteHeader(http.StatusNoContent)
 				return
 			}
@@ -374,7 +396,7 @@ func (s *Server) handleOAuthStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	c := security.Claims{Typ: security.TypOAuth, Provider: p.Name, State: security.RandomID(24), Verifier: security.RandomID(48), Mode: "login"}
-	if r.URL.Query().Get("mode") == "link" {
+	if mode := r.URL.Query().Get("mode"); mode == "link" || mode == "reauth" {
 		ck, err := r.Cookie(cookieAccess)
 		if err != nil {
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
@@ -385,7 +407,12 @@ func (s *Server) handleOAuthStart(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
-		c.Mode, c.Subject = "link", u.ID
+		// linking another sign-in is sensitive: it needs a recent sign-in
+		if mode == "link" && !isFresh(u) {
+			http.Redirect(w, r, "/account?fehler=bestaetigen", http.StatusSeeOther)
+			return
+		}
+		c.Mode, c.Subject = mode, u.ID
 	}
 	tok, err := s.tokens.Sign(c, 10*time.Minute)
 	if err != nil {
@@ -418,6 +445,21 @@ func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		back("/login?fehler=oauth")
 		return
 	}
+	if c.Mode == "reauth" {
+		// confirm the signed-in account: the provider identity must belong to it
+		var owner string
+		err := s.db.QueryRow(ctx, `SELECT user_id::text FROM oauth_identities WHERE provider=$1 AND subject=$2`, p.Name, sub).Scan(&owner)
+		if err != nil || owner != c.Subject {
+			back("/account?fehler=bestaetigung")
+			return
+		}
+		if err := s.startSession(w, owner, time.Now()); err != nil {
+			internal(w, err)
+			return
+		}
+		back("/account?bestaetigt=1")
+		return
+	}
 	if c.Mode == "link" {
 		at, err := r.Cookie(cookieAccess)
 		var u *user
@@ -440,6 +482,8 @@ func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 				back("/account?fehler=vorhanden")
 				return
 			}
+			s.db.Exec(ctx, `INSERT INTO notices(user_id, title, body) VALUES ($1,$2,$3)`, u.ID, p.Label+" wurde mit deinem Konto verknüpft",
+				"Am "+time.Now().Format("02.01.2006 um 15:04")+" Uhr. Warst du das nicht? Trenne die Verknüpfung unter Konto und melde dich überall ab.")
 			back("/account?verknuepft=" + p.Name)
 		default:
 			internal(w, err)
@@ -449,7 +493,7 @@ func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	var uid string
 	err = s.db.QueryRow(ctx, `SELECT user_id FROM oauth_identities WHERE provider=$1 AND subject=$2`, p.Name, sub).Scan(&uid)
 	if err == nil {
-		if err := s.startSession(w, uid); err != nil {
+		if err := s.startSession(w, uid, time.Now()); err != nil {
 			internal(w, err)
 			return
 		}

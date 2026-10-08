@@ -5,12 +5,32 @@
   import { notify } from '../lib/toast.svelte.js';
   let tab = $state('reports'), status = $state('open'), reports = $state(null), strains = $state([]), q = $state(''), err = $state('');
   let notes = $state({}), mergeFrom = $state(null), pinFor = $state(null), pinPhotos = $state([]);
+  let bans = $state(null), log = $state(null);
+  const loadBans = () => api('/api/admin/bans').then(r => (bans = r)).catch(e => (err = e.message));
+  const loadLog = () => api('/api/admin/log').then(r => (log = r)).catch(e => (err = e.message));
+  function openTab(v) { tab = v; err = ''; if (v === 'bans') loadBans(); if (v === 'log') loadLog(); }
+  const ACTIONS = {
+    hide_comment: 'Kommentar ausgeblendet', hide_photo: 'Foto ausgeblendet', share_ban: 'Teilen gesperrt', share_unban: 'Sperre aufgehoben',
+    dismiss_comment: 'Meldung verworfen (Kommentar)', dismiss_photo: 'Meldung verworfen (Foto)', dismiss_name: 'Meldung verworfen (Name)',
+    rename_strain: 'Sorte umbenannt', merge_strain: 'Sorten zusammengeführt'
+  };
+  const TARGET = { photo: 'Foto', comment: 'Kommentar', name: 'Sortenname' };
   const loadReports = () => api('/api/admin/reports?status=' + status).then(r => (reports = r)).catch(e => (err = e.message));
   const loadStrains = () => api('/api/admin/strains?q=' + encodeURIComponent(q)).then(r => (strains = r)).catch(e => (err = e.message));
   loadReports(); loadStrains();
   async function resolve(r, action) {
-    try { await api('/api/admin/reports/' + r.id, { method: 'POST', body: { action, note: notes[r.id] || '' } }); notify(action === 'hide' ? 'Ausgeblendet, Person wurde informiert.' : 'Meldung verworfen.'); loadReports(); }
-    catch (e) { err = e.message; }
+    let name;
+    if (action === 'rename') { name = prompt('Neuer Name für die Sorte:', r.strainName); if (!name) return; }
+    if (action === 'hide_ban' && !confirm('Inhalt ausblenden und das öffentliche Teilen für dieses Konto sperren? Alle öffentlichen Bewertungen des Kontos werden entfernt.')) return;
+    try {
+      await api('/api/admin/reports/' + r.id, { method: 'POST', body: { action, note: notes[r.id] || '', name } });
+      notify({ hide: 'Ausgeblendet, die Person wurde informiert.', hide_ban: 'Ausgeblendet und Teilen gesperrt.', rename: 'Sorte umbenannt.', dismiss: 'Meldung verworfen.' }[action]);
+      loadReports();
+    } catch (e) { err = e.message; }
+  }
+  async function unban(b) {
+    if (!confirm(`Sperre für Konto ${b.key} aufheben?`)) return;
+    try { await api(`/api/admin/users/${b.id}/unban`, { method: 'POST' }); notify('Sperre aufgehoben.'); loadBans(); } catch (e) { err = e.message; }
   }
   async function rename(s) {
     const n = prompt('Neuer Name:', s.name); if (!n) return;
@@ -27,8 +47,8 @@
 </script>
 
 {#if !session.me.isAdmin}<p class="err">Kein Zugriff.</p>{:else}
-<div class="head"><div><h1>Moderation</h1><p class="muted">Meldungen prüfen, Sorten pflegen, Titelbilder festlegen.</p></div></div>
-<div class="tabs">{#each [['reports', 'Meldungen'], ['strains', 'Sorten']] as [v, l]}<button class="chip" class:on={tab === v} onclick={() => (tab = v)}>{l}</button>{/each}</div>
+<div class="head"><div><h1>Moderation</h1><p class="muted">Meldungen prüfen, Sorten pflegen, Sperren verwalten. Konten erscheinen nur als anonyme Kennung.</p></div></div>
+<div class="tabs">{#each [['reports', 'Meldungen'], ['strains', 'Sorten'], ['bans', 'Sperren'], ['log', 'Protokoll']] as [v, l]}<button class="chip" class:on={tab === v} onclick={() => openTab(v)}>{l}</button>{/each}</div>
 {#if err}<p class="err" style="margin-bottom:14px">{err}</p>{/if}
 
 {#if tab === 'reports'}
@@ -37,15 +57,50 @@
   <div style="display:grid;gap:12px;max-width:760px">
     {#each reports || [] as r (r.id)}
       <div class="admin-item">
-        <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><b>{r.target === 'photo' ? 'Foto' : 'Kommentar'} zu <a href="/public/{r.strainId}">{r.strainName}</a></b><span class="muted" style="font-size:13px">{date(r.createdAt)}{r.openReports > 1 ? `, ${r.openReports} offene Meldungen` : ''}</span></div>
-        <div><span class="pill">{r.reasonLabel}</span>{#if r.details}<span class="muted" style="font-size:14px"> {r.details}</span>{/if}</div>
-        {#if r.target === 'comment'}<p class="notes" style="background:var(--surface);border-radius:10px;padding:10px 12px;white-space:pre-line">{r.comment || '(Kommentar inzwischen entfernt)'}</p>
-        {:else if r.photoId}<div class="mini-img"><img src={photoURL(r.photoId)} alt="Gemeldetes Foto"></div>{/if}
+        <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
+          <b>{TARGET[r.target]} {r.target === 'name' ? '' : 'zu '}{#if r.strainId}<a href="/public/{r.strainId}">{r.strainName}</a>{:else}{r.strainName}{/if}</b>
+          <span class="muted" style="font-size:13px">{date(r.createdAt)}{r.openReports > 1 ? `, ${r.openReports} offene Meldungen` : ''}</span>
+        </div>
+        <div class="row-actions" style="align-items:center">
+          <span class="pill">{r.reasonLabel}</span>
+          {#if r.withdrawn}<span class="pill">Inzwischen nicht mehr geteilt</span>{/if}
+          {#if r.author}<span class="muted" style="font-size:13px">Konto {r.author}{r.authorStrikes ? `, bisher ${r.authorStrikes}× ausgeblendet` : ''}{r.authorBanned ? ', Teilen gesperrt' : ''}</span>{/if}
+        </div>
+        {#if r.details}<p class="muted" style="font-size:14px">{r.details}</p>{/if}
+        {#if r.target === 'comment'}<p class="notes" style="background:var(--surface);border-radius:10px;padding:10px 12px;white-space:pre-line">{r.content || '(Kommentar nicht mehr vorhanden)'}</p>
+        {:else if r.target === 'photo'}{#if r.photoId}<div class="mini-img"><img src={photoURL(r.photoId)} alt="Gemeldetes Foto"></div>{:else}<p class="muted">(Foto nicht mehr vorhanden)</p>{/if}{/if}
         {#if status === 'open'}
-          <div class="field"><label for="n{r.id}">Begründung für die Person (optional)</label><input id="n{r.id}" bind:value={notes[r.id]} maxlength="300"></div>
-          <div class="row-actions"><button class="btn btn-danger" onclick={() => resolve(r, 'hide')}>Ausblenden</button><button class="btn btn-ghost" onclick={() => resolve(r, 'dismiss')}>Verwerfen</button></div>
+          {#if r.target === 'name'}
+            <div class="row-actions"><button class="btn btn-danger" onclick={() => resolve(r, 'rename')}>Umbenennen</button><button class="btn btn-ghost" onclick={() => resolve(r, 'dismiss')}>Verwerfen</button></div>
+          {:else}
+            <div class="field"><label for="n{r.id}">Begründung für die Person (optional)</label><input id="n{r.id}" bind:value={notes[r.id]} maxlength="300"></div>
+            <div class="row-actions">
+              <button class="btn btn-danger" onclick={() => resolve(r, 'hide')}>Ausblenden</button>
+              {#if r.author && !r.authorBanned}<button class="btn btn-line" onclick={() => resolve(r, 'hide_ban')}>Ausblenden und Teilen sperren</button>{/if}
+              <button class="btn btn-ghost" onclick={() => resolve(r, 'dismiss')}>Verwerfen</button>
+            </div>
+          {/if}
         {/if}
       </div>
+    {/each}
+  </div>
+{:else if tab === 'bans'}
+  <p class="lead" style="margin-top:0">Gesperrte Konten können ihr privates Logbuch weiter nutzen, aber nichts öffentlich teilen.</p>
+  {#if !bans}<div class="spinner"></div>{:else if !bans.length}<p class="muted">Keine Sperren.</p>{/if}
+  <div class="timeline" style="max-width:760px">
+    {#each bans || [] as b (b.id)}
+      <div class="tl" style="grid-template-columns:1fr auto"><span><b style="font-weight:500">Konto {b.key}</b><br><span class="muted" style="font-size:13px">Seit {date(b.since)}{b.reason ? `, ${b.reason}` : ''}, {b.strikes}× ausgeblendet</span></span><button class="btn btn-line" onclick={() => unban(b)}>Sperre aufheben</button></div>
+    {/each}
+  </div>
+{:else if tab === 'log'}
+  <p class="lead" style="margin-top:0">Alle Entscheidungen der Moderation. Wird ein Konto gelöscht, bleiben nur Datum, Aktion und Grund.</p>
+  {#if !log}<div class="spinner"></div>{:else if !log.length}<p class="muted">Noch keine Einträge.</p>{/if}
+  <div class="timeline" style="max-width:860px">
+    {#each log || [] as l}
+      <div class="tl" style="grid-template-columns:110px 1fr"><time>{date(l.createdAt)}</time>
+        <span><b style="font-weight:500">{ACTIONS[l.action] || l.action}</b>{l.strainName ? `: ${l.strainName}` : ''}{#if l.account}<span class="muted" style="font-size:13px"> (Konto {l.account})</span>{/if}
+          {#if l.reason || l.note}<br><span class="muted" style="font-size:13px">{[l.reason, l.note].filter(Boolean).join('. ')}</span>{/if}
+          {#if l.content}<br><span style="font-size:13px;white-space:pre-line">„{l.content}“</span>{/if}</span></div>
     {/each}
   </div>
 {:else}

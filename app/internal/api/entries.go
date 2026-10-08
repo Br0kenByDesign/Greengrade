@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"net/http"
@@ -50,6 +51,9 @@ func ensureStrain(ctx context.Context, tx pgx.Tx, name string) (string, error) {
 	norm := NormalizeName(name)
 	if norm == "" {
 		return "", errBad("Bitte gib den Namen der Sorte ein.")
+	}
+	if err := security.CheckStrainName(name); err != nil {
+		return "", errBad(err.Error())
 	}
 	var id string
 	err := tx.QueryRow(ctx, `INSERT INTO strains(name, name_norm) VALUES ($1,$2)
@@ -883,6 +887,24 @@ func (s *Server) handleShare(w http.ResponseWriter, r *http.Request) {
 			}
 			photo = in.PhotoID
 		}
+		// unchanged content keeps its moderation state; new content is checked against bans and blocks
+		var oldComment, oldPhoto *string
+		tx.QueryRow(ctx, `SELECT comment, photo_id FROM public_ratings WHERE entry_id=$1`, id).Scan(&oldComment, &oldPhoto)
+		checkComment, checkPhoto := comment, photo
+		if comment != nil && oldComment != nil && *comment == *oldComment {
+			checkComment = nil
+		}
+		if photo != nil && oldPhoto != nil && *photo == *oldPhoto {
+			checkPhoto = nil
+		}
+		if err := s.shareAllowed(ctx, tx, u.ID, checkComment, checkPhoto); err != nil {
+			writeErr(w, err)
+			return
+		}
+		var fp []byte
+		if comment != nil {
+			fp = s.commentFP(*comment)
+		}
 		var sm, ta, lo, ef, qu int
 		err := tx.QueryRow(ctx, `SELECT smell, taste, look, effect, quality FROM tastings WHERE entry_id=$1 ORDER BY tasted_on DESC, created_at DESC LIMIT 1`, id).
 			Scan(&sm, &ta, &lo, &ef, &qu)
@@ -894,15 +916,15 @@ func (s *Server) handleShare(w http.ResponseWriter, r *http.Request) {
 			internal(w, err)
 			return
 		}
-		_, err = tx.Exec(ctx, `INSERT INTO public_ratings(strain_id, user_id, entry_id, overall, smell, taste, look, effect, quality, comment, photo_id)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+		_, err = tx.Exec(ctx, `INSERT INTO public_ratings(strain_id, user_id, entry_id, overall, smell, taste, look, effect, quality, comment, photo_id, comment_fp)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
 			ON CONFLICT (entry_id) DO UPDATE SET
 				strain_id=EXCLUDED.strain_id, overall=EXCLUDED.overall, smell=EXCLUDED.smell, taste=EXCLUDED.taste, look=EXCLUDED.look,
 				effect=EXCLUDED.effect, quality=EXCLUDED.quality,
 				comment_hidden = CASE WHEN public_ratings.comment IS DISTINCT FROM EXCLUDED.comment THEN false ELSE public_ratings.comment_hidden END,
 				photo_hidden = CASE WHEN public_ratings.photo_id IS DISTINCT FROM EXCLUDED.photo_id THEN false ELSE public_ratings.photo_hidden END,
-				comment=EXCLUDED.comment, photo_id=EXCLUDED.photo_id, updated_at=now()`,
-			sid, u.ID, id, overall(sm, ta, lo, ef, qu), sm, ta, lo, ef, qu, comment, photo)
+				comment=EXCLUDED.comment, photo_id=EXCLUDED.photo_id, comment_fp=EXCLUDED.comment_fp, updated_at=now()`,
+			sid, u.ID, id, overall(sm, ta, lo, ef, qu), sm, ta, lo, ef, qu, comment, photo, fp)
 		if err != nil {
 			internal(w, err)
 			return
@@ -953,7 +975,13 @@ func (s *Server) handlePhotoUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer f.Close()
+	release, err := media.Acquire(ctx)
+	if err != nil {
+		fail(w, http.StatusServiceUnavailable, err.Error())
+		return
+	}
 	res, err := media.Process(io.Reader(f))
+	release()
 	if err != nil {
 		if errors.Is(err, media.ErrUnsupported) || errors.Is(err, media.ErrTooLarge) {
 			writeErr(w, errBad(err.Error()))
@@ -963,8 +991,8 @@ func (s *Server) handlePhotoUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var pid string
-	if err := s.db.QueryRow(ctx, `INSERT INTO photos(user_id, entry_id, width, height) VALUES ($1,$2,$3,$4) RETURNING id`,
-		u.ID, id, res.Width, res.Height).Scan(&pid); err != nil {
+	if err := s.db.QueryRow(ctx, `INSERT INTO photos(user_id, entry_id, width, height, content_hash) VALUES ($1,$2,$3,$4,$5) RETURNING id`,
+		u.ID, id, res.Width, res.Height, res.Hash).Scan(&pid); err != nil {
 		internal(w, err)
 		return
 	}
@@ -1004,20 +1032,29 @@ func (s *Server) handlePhotoGet(w http.ResponseWriter, r *http.Request) {
 	var allowed bool
 	err := s.db.QueryRow(r.Context(), `SELECT
 		EXISTS (SELECT 1 FROM photos WHERE id=$1 AND user_id=$2)
-		OR EXISTS (SELECT 1 FROM public_ratings WHERE photo_id=$1 AND (NOT photo_hidden OR $3))`, id, u.ID, u.Admin).Scan(&allowed)
+		OR EXISTS (SELECT 1 FROM public_ratings WHERE photo_id=$1 AND (NOT photo_hidden OR $3))
+		OR ($3 AND EXISTS (SELECT 1 FROM reports WHERE photo_id=$1))`, id, u.ID, u.Admin).Scan(&allowed)
 	if err != nil || !allowed {
 		fail(w, http.StatusNotFound, "Nicht gefunden.")
 		return
 	}
-	f, err := s.photos.Open(id, r.URL.Query().Get("size") == "thumb")
+	thumb := r.URL.Query().Get("size") == "thumb"
+	f, err := s.photos.Open(id, thumb)
 	if err != nil {
 		fail(w, http.StatusNotFound, "Nicht gefunden.")
 		return
 	}
 	defer f.Close()
+	st, err := f.Stat()
+	if err != nil {
+		internal(w, err)
+		return
+	}
 	h := w.Header()
 	h.Set("Content-Type", "image/jpeg")
-	h.Set("Cache-Control", "private, max-age=86400")
+	// The browser may keep a copy but must ask every time (cheap 304), so access rules apply immediately.
+	h.Set("Cache-Control", "private, no-cache")
 	h.Set("Content-Disposition", "inline")
-	io.Copy(w, f)
+	h.Set("ETag", fmt.Sprintf(`"%s-%t-%x"`, id[:8], thumb, st.ModTime().UnixNano()))
+	http.ServeContent(w, r, "", st.ModTime(), f)
 }

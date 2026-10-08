@@ -29,6 +29,20 @@ export async function passkeyLogin() {
   } });
 }
 
+// Confirms the signed-in account with one of its own passkeys.
+export async function passkeyReauth() {
+  const { publicKey } = await api('/api/me/reauth/passkey/begin', { method: 'POST' });
+  publicKey.challenge = dec(publicKey.challenge);
+  (publicKey.allowCredentials || []).forEach(c => (c.id = dec(c.id)));
+  const cred = await navigator.credentials.get({ publicKey });
+  const r = cred.response;
+  return api('/api/me/reauth/passkey/finish', { method: 'POST', body: {
+    id: cred.id, rawId: enc(cred.rawId), type: cred.type, authenticatorAttachment: cred.authenticatorAttachment,
+    clientExtensionResults: cred.getClientExtensionResults(),
+    response: { clientDataJSON: enc(r.clientDataJSON), authenticatorData: enc(r.authenticatorData), signature: enc(r.signature), userHandle: r.userHandle ? enc(r.userHandle) : null }
+  } });
+}
+
 export async function passkeyRegister() {
   const { publicKey } = await api('/api/me/passkeys/begin', { method: 'POST' });
   publicKey.challenge = dec(publicKey.challenge);

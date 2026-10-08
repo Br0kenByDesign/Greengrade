@@ -40,6 +40,9 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 		identities = append(identities, p)
 	}
 	rows.Close()
+	var banned bool
+	var banReason string
+	s.db.QueryRow(ctx, `SELECT share_banned_at IS NOT NULL, share_ban_reason FROM users WHERE id=$1`, u.ID).Scan(&banned, &banReason)
 	notices := []map[string]any{}
 	rows, err = s.db.Query(ctx, `SELECT id, title, body, created_at, read_at IS NOT NULL FROM notices WHERE user_id=$1 ORDER BY created_at DESC LIMIT 20`, u.ID)
 	if err != nil {
@@ -56,6 +59,7 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	rows.Close()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"id": u.ID, "displayName": u.Name, "isAdmin": u.Admin, "hasEmail": u.HasMail,
+		"shareBanned": banned, "shareBanReason": banReason,
 		"passkeys": passkeys, "identities": identities, "providers": s.oauth.Enabled(), "notices": notices,
 	})
 }
@@ -101,6 +105,17 @@ func (s *Server) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		internal(w, err)
 		return
+	}
+	// moderation history keeps date, action and reason, but no content and no link to the person
+	for _, q := range []string{
+		`UPDATE moderation_actions SET content=NULL WHERE target_user_id=$1`,
+		`UPDATE reports SET content=NULL WHERE author_id=$1`,
+		`DELETE FROM moderation_blocks WHERE scope=$1::text`,
+	} {
+		if _, err := s.db.Exec(ctx, q, u.ID); err != nil {
+			internal(w, err)
+			return
+		}
 	}
 	if _, err := s.db.Exec(ctx, `DELETE FROM users WHERE id=$1`, u.ID); err != nil {
 		internal(w, err)

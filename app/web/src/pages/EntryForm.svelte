@@ -1,5 +1,6 @@
 <script>
   import { api, photoURL } from '../lib/api.js';
+  import { session } from '../lib/session.svelte.js';
   import { route, go } from '../lib/router.svelte.js';
   import { today, parseNum, date } from '../lib/format.js';
   import { preparePhoto } from '../lib/image.js';
@@ -100,7 +101,7 @@
         const fd = new FormData(); fd.append('file', p.blob, 'foto.jpg');
         uploaded.push((await api(`/api/entries/${id}/photos`, { method: 'POST', form: fd })).id);
       }
-      if (share.enabled || editId) {
+      if ((share.enabled || editId) && !session.me?.shareBanned) {
         const photoId = share.photo?.id ?? (share.photo?.pending != null ? uploaded[share.photo.pending] : null);
         await api(`/api/entries/${id}/share`, { method: 'PUT', body: { shared: share.enabled, comment: share.comment, photoId } });
       }
@@ -255,6 +256,9 @@
     <fieldset id="s5">
       <legend>Teilen</legend>
       <p class="lead">Deine Bewertung bleibt privat, solange du sie nicht freigibst.</p>
+      {#if session.me?.shareBanned}
+        <div class="note warn"><Icon name="info" size={20} /><span>Öffentliches Teilen ist für dein Konto gesperrt. Die Begründung findest du unter Konto. Deine Bewertung wird privat gespeichert.</span></div>
+      {:else}
       <div class="share">
         <div class="toggle">
           <div><div style="font-weight:500">Bewertung öffentlich teilen</div><div class="muted" style="font-size:13px">Fließt anonym in die öffentliche Sortenseite ein.</div></div>
@@ -282,6 +286,7 @@
           </div>
         {/if}
       </div>
+      {/if}
     </fieldset>
 
     {#if err}<p class="err" style="margin-bottom:16px">{err}</p>{/if}
