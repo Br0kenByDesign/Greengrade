@@ -31,6 +31,7 @@ type Config struct {
 	Secure         bool // cookies with Secure flag / HSTS
 	PrivacyURL     string
 	ImprintURL     string
+	TermsURL       string
 
 	MailProvider string // graph | smtp | log
 	MailFrom     string
@@ -86,6 +87,7 @@ func Load() (*Config, error) {
 		ModerationMail: env("MODERATION_EMAIL", ""),
 		PrivacyURL:     env("PRIVACY_URL", ""),
 		ImprintURL:     env("IMPRINT_URL", ""),
+		TermsURL:       env("TERMS_URL", ""),
 		MailProvider:   env("MAIL_PROVIDER", "log"),
 		MailFrom:       env("MAIL_FROM", ""),
 

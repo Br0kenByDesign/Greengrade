@@ -35,6 +35,7 @@ p{margin:0}
 .avatar{width:34px;height:34px;border-radius:50%;background:var(--leaf-soft);color:var(--leaf);display:grid;place-items:center;font-weight:600;font-size:13px;flex:none}
 .main{padding:40px clamp(18px,4vw,48px) 120px;max-width:1180px;width:100%}
 .tabbar{display:none}
+.subnav{display:none}
 
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:12px;padding:11px 18px;font-weight:500;cursor:pointer;text-decoration:none;min-height:44px}
 .btn svg{width:18px;height:18px}
@@ -277,7 +278,11 @@ legend{font-family:var(--display);font-size:22px;font-weight:600;letter-spacing:
   .card h3{font-size:15px}
   .fgrid{grid-template-columns:1fr}
   .facts{grid-template-columns:1fr}
+  .facts div:nth-child(odd){padding-right:0}
   .facts div:nth-child(even){padding-left:0;border-left:0}
+  .subnav{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;background:var(--surface);border-radius:12px;padding:4px;gap:4px;margin:-8px 0 22px}
+  .subnav a{text-align:center;border-radius:9px;padding:9px 6px;font-size:14px;font-weight:500;color:var(--muted);text-decoration:none}
+  .subnav a.on{background:var(--bg);color:var(--ink);box-shadow:0 1px 2px color-mix(in srgb,var(--ink) 12%,transparent)}
   .radarwrap{grid-template-columns:1fr}
   .auth{grid-template-columns:1fr}
   .auth .art{min-height:38vh;padding:28px 24px}

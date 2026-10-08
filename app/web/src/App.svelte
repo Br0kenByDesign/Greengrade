@@ -31,6 +31,9 @@
     return { c: NotFound, params: {} };
   });
   const section = $derived(route.path === '/' || route.path.startsWith('/entries') && route.path !== '/entries/new' ? '/' : '/' + (route.path.split('/')[1] || ''));
+  // Mobile: Übersicht, Statistik and Vergleichen share one tab with a sub-navigation.
+  const overview = [['/', 'Übersicht'], ['/stats', 'Statistik'], ['/compare', 'Vergleichen']];
+  const inOverview = $derived(route.path === '/' || route.path === '/stats' || route.path === '/compare');
   const unread = $derived(session.me?.notices?.filter(n => !n.read).length || 0);
 
   loadMe().then(me => { if (!me && !isAuth) go('/login', { replace: true }); });
@@ -71,10 +74,11 @@
       </a>
     </aside>
     <main class="main">
+      {#if inOverview}<nav class="subnav" aria-label="Übersicht">{#each overview as [href, label]}<a {href} class:on={route.path === href} aria-current={route.path === href ? 'page' : undefined}>{label}</a>{/each}</nav>{/if}
       {#key route.path}<current.c params={current.params} />{/key}
     </main>
     <nav class="tabbar" aria-label="Navigation">
-      <a href="/" class:on={section === '/'}><Icon name="dash" size={22} />Übersicht</a>
+      <a href="/" class:on={section === '/' || inOverview}><Icon name="dash" size={22} />Übersicht</a>
       <a href="/public" class:on={section === '/public'}><Icon name="globe" size={22} />Öffentlich</a>
       <a href="/entries/new" class="plus" aria-label="Neuer Eintrag"><Icon name="plus" size={22} /></a>
       <a href="/grows" class:on={section === '/grows'}><Icon name="grow" size={22} />Grows</a>

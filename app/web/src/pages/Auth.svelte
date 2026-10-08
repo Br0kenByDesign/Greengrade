@@ -11,7 +11,7 @@
   let step = $state('start'), email = $state(''), emailHint = $state(''), busy = $state(false), err = $state(''), info = $state('');
   let token = $state(''), name = $state(''), age = $state(false), consent = $state(false), countdown = $state(0);
   let code = $state('');
-  let providers = $state([]), privacyUrl = $state(''), imprintUrl = $state('');
+  let providers = $state([]), privacyUrl = $state(''), imprintUrl = $state(''), termsUrl = $state('');
 
   // capture one-time tokens from the URL fragment and remove them from the address bar immediately
   if (route.path === '/auth/verify' && route.hash) { token = route.hash; step = 'verify'; clearHash(); }
@@ -28,7 +28,7 @@
   }
   if (route.query.get('fehler')) err = 'Die Anmeldung beim Anbieter hat nicht geklappt. Bitte versuche es erneut.';
 
-  api('/api/auth/config').then(c => { providers = c.providers; privacyUrl = c.privacyUrl; imprintUrl = c.imprintUrl; }).catch(() => {});
+  api('/api/auth/config').then(c => { providers = c.providers; privacyUrl = c.privacyUrl; imprintUrl = c.imprintUrl; termsUrl = c.termsUrl || ''; }).catch(() => {});
 
   function maskEmail(e) {
     const [local, domain] = e.trim().toLowerCase().split('@');
@@ -103,7 +103,7 @@
         {/if}
       </div>
       {#if err}<p class="err" style="margin-top:16px">{err}</p>{/if}
-      {#if privacyUrl || imprintUrl}<small class="row-actions" style="gap:14px">{#if imprintUrl}<a href={imprintUrl} target="_blank" rel="noopener">Impressum</a>{/if}{#if privacyUrl}<a href={privacyUrl} target="_blank" rel="noopener">Datenschutz</a>{/if}</small>{/if}
+      {#if privacyUrl || imprintUrl || termsUrl}<small class="row-actions" style="display:flex;gap:6px 16px;flex-wrap:wrap">{#if imprintUrl}<a href={imprintUrl} target="_blank" rel="noopener">Impressum</a>{/if}{#if privacyUrl}<a href={privacyUrl} target="_blank" rel="noopener">Datenschutz</a>{/if}{#if termsUrl}<a href={termsUrl} target="_blank" rel="noopener">Nutzungsbedingungen</a>{/if}</small>{/if}
       <small>Deine E-Mail-Adresse speichern wir nicht, nur einen nicht umkehrbaren Fingerabdruck davon. {#if providers.length}Bei Social Login erfährt der Anbieter nur, dass du dich bei greengrade anmeldest - nicht, was du einträgst.{/if}</small>
     {:else if step === 'sent'}
       <div class="mailicon"><Icon name="mail" size={26} /></div>
@@ -130,7 +130,7 @@
       <form class="stack" onsubmit={signup}>
         <div class="field"><label for="a-name">Wie sollen wir dich nennen?</label><input id="a-name" bind:value={name} maxlength="40" required><div class="hint">Nur für dich sichtbar. Öffentliche Bewertungen sind immer anonym.</div></div>
         <div>
-          <label class="check"><input type="checkbox" bind:checked={age}>Ich bin mindestens 18 Jahre alt.</label>
+          <label class="check"><input type="checkbox" bind:checked={age}><span>Ich bin mindestens 18 Jahre alt{#if termsUrl} und akzeptiere die <a href={termsUrl} target="_blank" rel="noopener">Nutzungsbedingungen</a>{/if}.</span></label>
           <label class="check"><input type="checkbox" bind:checked={consent}><span>Ich willige ein, dass greengrade meine Einträge speichert - auch gesundheitsbezogene Angaben wie Apothekensorten, Wirkungen und Nebenwirkungen. Ich kann die Einwilligung jederzeit widerrufen, indem ich mein Konto lösche.{#if privacyUrl} <a href={privacyUrl} target="_blank" rel="noopener">Datenschutzerklärung</a>{/if}</span></label>
         </div>
         <button class="btn btn-primary" disabled={!age || !consent || !name.trim() || busy}>Konto anlegen</button>

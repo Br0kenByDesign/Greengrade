@@ -143,6 +143,39 @@ func notify(ctx context.Context, tx pgx.Tx, userID, title, body string) error {
 	return err
 }
 
+// redress is appended to every decision that affects an author (Art. 17 DSA).
+const redress = " Hältst du die Entscheidung für falsch, kannst du widersprechen. Wie das geht, steht in den Nutzungsbedingungen."
+
+// closeReports resolves matching open reports and tells each reporter the outcome (Art. 16 Abs. 5 DSA).
+// The reporter learns nothing about the author.
+func closeReports(ctx context.Context, tx pgx.Tx, status, strain, outcome, where string, args ...any) error {
+	rows, err := tx.Query(ctx, `UPDATE reports SET status='`+status+`', resolved_at=now() WHERE status='open' AND (`+where+`) RETURNING reporter_id::text`, args...)
+	if err != nil {
+		return err
+	}
+	seen := map[string]bool{}
+	for rows.Next() {
+		var rid *string
+		if err := rows.Scan(&rid); err != nil {
+			rows.Close()
+			return err
+		}
+		if rid != nil {
+			seen[*rid] = true
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for rid := range seen {
+		if err := notify(ctx, tx, rid, "Deine Meldung zu "+strain+" wurde geprüft", outcome+" Danke, dass du hilfst, greengrade sauber zu halten."); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // ---------- hiding and bans ----------
 
 type modItem struct {
@@ -203,8 +236,8 @@ func (s *Server) moderate(ctx context.Context, actorID string, it modItem, reaso
 		default:
 			return errBad("Ungültige Angaben.")
 		}
-		if _, err := tx.Exec(ctx, `UPDATE reports SET status='hidden', resolved_at=now()
-			WHERE status='open' AND target=$1 AND (id::text=$2 OR ($3<>'' AND public_rating_id::text=$3))`,
+		if err := closeReports(ctx, tx, "hidden", it.StrainName, "Der gemeldete Inhalt wurde ausgeblendet.",
+			`target=$1 AND (id::text=$2 OR ($3<>'' AND public_rating_id::text=$3))`,
 			it.Target, it.ReportID, it.RatingID); err != nil {
 			return err
 		}
@@ -221,7 +254,7 @@ func (s *Server) moderate(ctx context.Context, actorID string, it modItem, reaso
 		if note != "" {
 			body += " " + note
 		}
-		body += " Deine Note zählt weiterhin. Derselbe Inhalt kann nicht erneut geteilt werden."
+		body += " Deine Note zählt weiterhin. Derselbe Inhalt kann nicht erneut geteilt werden." + redress
 		if err := notify(ctx, tx, it.AuthorID, what+" zu "+it.StrainName+" wurde ausgeblendet", body); err != nil {
 			return err
 		}
@@ -248,7 +281,7 @@ func banShare(ctx context.Context, tx pgx.Tx, userID, reason, note, actorID stri
 	if note != "" {
 		body += " " + note
 	}
-	body += " Deine bisherigen öffentlichen Bewertungen wurden entfernt. Dein privates Logbuch kannst du wie gewohnt weiter nutzen."
+	body += " Deine bisherigen öffentlichen Bewertungen wurden entfernt. Dein privates Logbuch kannst du wie gewohnt weiter nutzen." + redress
 	return notify(ctx, tx, userID, "Dein Konto kann vorerst nichts mehr öffentlich teilen", body)
 }
 
@@ -401,8 +434,8 @@ func (s *Server) handleAdminResolve(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case in.Action == "dismiss":
 		err = pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
-			if _, err := tx.Exec(ctx, `UPDATE reports SET status='dismissed', resolved_at=now() WHERE status='open' AND target=$1
-				AND (id=$2 OR ($3::uuid IS NOT NULL AND public_rating_id=$3) OR ($1='name' AND strain_id=$4))`, target, id, rid, sid); err != nil {
+			if err := closeReports(ctx, tx, "dismissed", sname, "Wir konnten keinen Verstoß gegen die Nutzungsbedingungen oder geltendes Recht feststellen. Der Inhalt bleibt sichtbar.",
+				`target=$1 AND (id=$2 OR ($3::uuid IS NOT NULL AND public_rating_id=$3) OR ($1='name' AND strain_id=$4))`, target, id, rid, sid); err != nil {
 				return err
 			}
 			return logAction(ctx, tx, modAction{Action: "dismiss_" + target, Reason: reportReasons[reason], Note: note, StrainName: sname, ActorID: u.ID})
@@ -413,7 +446,9 @@ func (s *Server) handleAdminResolve(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		if err = s.renameStrain(ctx, *sid, in.Name, u.ID, reportReasons[reason]); err == nil {
-			_, err = s.db.Exec(ctx, `UPDATE reports SET status='hidden', resolved_at=now() WHERE status='open' AND target='name' AND strain_id=$1`, *sid)
+			err = pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+				return closeReports(ctx, tx, "hidden", sname, "Der gemeldete Sortenname wurde geändert.", `target='name' AND strain_id=$1`, *sid)
+			})
 		}
 	case target != "name" && (in.Action == "hide" || in.Action == "hide_ban"):
 		err = s.moderate(ctx, u.ID, modItem{ReportID: id, RatingID: deref(rid), Target: target, StrainName: sname,
