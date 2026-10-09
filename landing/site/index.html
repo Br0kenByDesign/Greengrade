@@ -121,6 +121,33 @@
   </div>
 </section>
 
+<section class="sec" id="fragen">
+  <h2>Fragen zum Datenschutz.</h2>
+  <div class="faq">
+    <details>
+      <summary>Wisst ihr, wer ich bin?</summary>
+      <p>Nein. Wir kennen weder deinen Namen noch deine E-Mail-Adresse. Dein Konto besteht aus einem Anzeigenamen, den du dir selbst aussuchst, und einem Fingerabdruck deiner E-Mail-Adresse. Aus diesem Fingerabdruck lässt sich deine Adresse nicht zurückrechnen.</p>
+    </details>
+    <details>
+      <summary>Was ist dieser Fingerabdruck?</summary>
+      <p>Wir speichern deine E-Mail-Adresse nicht, sondern einen sogenannten HMAC. Das ist eine Rechnung in nur eine Richtung: Aus deiner Adresse und einem geheimen Schlüssel, der nur auf unserem Server liegt, entsteht eine lange Zeichenkette wie <code>3f9a…c71e</code>. Dieselbe Adresse ergibt immer denselben Fingerabdruck, deshalb erkennt dich die App bei der Anmeldung wieder.</p>
+      <p>Rückwärts geht es nicht: Aus der Zeichenkette wird nie wieder eine Adresse. Und weil der geheime Schlüssel dazugehört, kann auch niemand mit einer Liste bekannter Adressen ausprobieren, welche passt.</p>
+    </details>
+    <details>
+      <summary>Kann der Betreiber meine Einträge oder Fotos einer Person zuordnen?</summary>
+      <p>Nein. Fotos und Einträge hängen zwar an deinem Konto, aber das Konto hängt an keinem Namen und keiner Adresse. Zuordnen ließe sich etwas erst, wenn du uns selbst deine E-Mail-Adresse nennst, zum Beispiel weil du eine Frage zu deinem Konto hast. Dann können wir daraus den Fingerabdruck berechnen und dein Konto finden. Den Schlüssel zu deinem Konto hältst also du in der Hand, nicht wir.</p>
+    </details>
+    <details>
+      <summary>Warum braucht ihr dann überhaupt meine E-Mail-Adresse?</summary>
+      <p>Nur für den einen Moment, in dem wir dir den Anmeldelink schicken. Danach vergessen wir sie. Unser Mail-Anbieter führt wie jeder Mail-Anbieter ein Versandprotokoll, in dem die Adresse eine Zeit lang steht. Wenn du dich mit einem Passkey anmeldest, gibt es danach gar keine Mails mehr.</p>
+    </details>
+    <details>
+      <summary>Woher weiß ich, dass das alles stimmt?</summary>
+      <p>Musst du nicht glauben, du kannst es nachlesen. greengrade ist Open Source, der gesamte Code liegt auf <a href="https://github.com/Br0kenByDesign/Greengrade" rel="noopener">GitHub</a>. Und wenn du niemandem vertrauen willst, betreibst du greengrade offline, auf deinem eigenen Server.</p>
+    </details>
+  </div>
+</section>
+
 <section class="sec split" id="selbst-hosten">
   <div>
     <h2>Lieber auf deinem eigenen Server?</h2>
