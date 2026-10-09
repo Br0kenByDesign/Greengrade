@@ -1,6 +1,6 @@
-<p align="center"><img src="design/app-icon.svg" width="96" alt=""></p>
+<p align="center"> <img width="516" height="113" alt="image" src="https://github.com/user-attachments/assets/c4864973-8446-4520-9732-1af41022da05" /> </p>
 
-<h1 align="center">greengrade</h1>
+<p align="center"> <a href="https://greengrade.cloud">Website</a> &nbsp;•&nbsp; <a href="https://app.greengrade.cloud">App</a> &nbsp;•&nbsp; <a href="https://status.greengrade.cloud">Status</a> </p>
 
 <p align="center">Ein privates Logbuch zum Bewerten von Cannabis aus Apotheke und eigenem Grow.<br>Selbst gehostet, ohne Passwörter, mit optionalen anonymen öffentlichen Bewertungen.</p>
 
@@ -21,16 +21,25 @@ Die Oberfläche ist auf Deutsch.
 - Mehrere Verkostungen pro Sorte (z. B. nach dem Curing erneut bewerten)
 - Fotos mit automatischer Entfernung aller Metadaten
 - Merkliste, Entwürfe auf dem Gerät, Suche und Filter
+        <p align="center"> <table> <tr> <td>
+        <img width="440" height="433" alt="image" src="https://github.com/user-attachments/assets/70d5d92d-ebc5-4441-86ed-a398d31d6a61" />
+        </td> </tr> </table> </p>
 
 **Grows**
 - Laufende Grows mit Blütetag-Zähler und voraussichtlichem Erntedatum
 - Logbuch pro Grow, "Heute auf Blüte umgestellt" und "Heute geerntet" mit einem Klick
 - Nach der Ernte direkt aus dem Grow heraus bewerten
+        <p align="center"> <table> <tr> <td>
+        <img width="433" height="298" alt="image" src="https://github.com/user-attachments/assets/93615359-5615-42f0-91c8-0eaff3f7ef7c" />
+        </td> </tr> </table> </p>
 
 **Auswertung**
 - Statistik: Noten nach Kategorie, Verlauf pro Monat, Bestenliste, Grow vs. Apotheke, häufigste Aromen, Wirkungen und Terpene, Durchschnittspreis und -THC
 - Zwei Sorten nebeneinander vergleichen
 - Vergleich der eigenen Noten mit dem Community-Durchschnitt
+        <p align="center"> <table> <tr> <td>
+        <img width="455" height="419" alt="image" src="https://github.com/user-attachments/assets/187ed6e4-0f60-4c4e-817b-0175fa31cbcf" />
+        </td> </tr> </table> </p>
 
 **Öffentliche Bewertungen**
 - Pro Eintrag wählbar: Bewertung öffentlich teilen, optional mit Kommentar und Foto
@@ -39,6 +48,9 @@ Die Oberfläche ist auf Deutsch.
 - Sortenvorschläge beim Tippen, damit Bewertungen derselben Sorte zusammenfinden
 - Rangliste mit gewichtetem Durchschnitt (eine einzelne 10/10 landet nicht sofort oben)
 - Für Sorten ohne Foto wird automatisch eine eigene Illustration erzeugt
+        <p align="center"> <table> <tr> <td>
+        <img width="492" height="273" alt="image" src="https://github.com/user-attachments/assets/2f49efb8-9ecf-4fd1-8c9a-093fb4f11761" />
+        </td> </tr> </table> </p>
 
 **Moderation**
 - Kommentare, Fotos und Sortennamen melden
