@@ -13,9 +13,12 @@ func htmlEscape(s string) string { return html.EscapeString(s) }
 
 func (s *Server) handleAdminStrains(w http.ResponseWriter, r *http.Request) {
 	norm := NormalizeName(r.URL.Query().Get("q"))
-	rows, err := s.db.Query(r.Context(), `SELECT s.id, s.name, s.pinned_photo_id,
-		(SELECT count(*) FROM entries e WHERE e.strain_id=s.id), (SELECT count(*) FROM public_ratings p WHERE p.strain_id=s.id)
+	// Only strains that are visible to others (shared ratings) or reported. Names that exist only
+	// in private logs are none of the moderation's business.
+	rows, err := s.db.Query(r.Context(), `SELECT s.id, s.name, s.pinned_photo_id, (SELECT count(*) FROM public_ratings p WHERE p.strain_id=s.id)
 		FROM strains s WHERE ($1='' OR s.name_norm LIKE '%'||$1||'%' OR similarity(s.name_norm,$1) > 0.3)
+		  AND (EXISTS (SELECT 1 FROM public_ratings p WHERE p.strain_id=s.id)
+		       OR EXISTS (SELECT 1 FROM reports rp WHERE rp.strain_id=s.id AND rp.status='open'))
 		ORDER BY (SELECT count(*) FROM public_ratings p WHERE p.strain_id=s.id) DESC, s.name LIMIT 100`, norm)
 	if err != nil {
 		internal(w, err)
@@ -26,9 +29,9 @@ func (s *Server) handleAdminStrains(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var id, name string
 		var pin *string
-		var e, p int
-		rows.Scan(&id, &name, &pin, &e, &p)
-		out = append(out, map[string]any{"id": id, "name": name, "pinnedPhotoId": pin, "entries": e, "ratings": p})
+		var p int
+		rows.Scan(&id, &name, &pin, &p)
+		out = append(out, map[string]any{"id": id, "name": name, "pinnedPhotoId": pin, "ratings": p})
 	}
 	writeJSON(w, http.StatusOK, out)
 }

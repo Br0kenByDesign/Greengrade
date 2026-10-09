@@ -1,4 +1,5 @@
 <script>
+  import { hasDraft, clearPersonal } from '../lib/local.js';
   import { api, loadMe, ensureFresh } from '../lib/api.js';
   import { session } from '../lib/session.svelte.js';
   import { route, go } from '../lib/router.svelte.js';
@@ -29,7 +30,9 @@
   const delPasskey = id => confirm('Passkey entfernen?') && run(() => api('/api/me/passkeys/' + id, { method: 'DELETE' }), 'Passkey entfernt.');
   const unlink = p => confirm('Verknüpfung trennen?') && run(() => api('/api/me/identities/' + p, { method: 'DELETE' }), 'Verknüpfung getrennt.');
   async function logout(all) {
+    if (hasDraft() && !confirm('Du hast einen gespeicherten Entwurf. Beim Abmelden wird er von diesem Gerät gelöscht. Trotzdem abmelden?')) return;
     try { await api(all ? '/api/me/logout-all' : '/api/auth/logout', { method: 'POST' }); } catch {}
+    clearPersonal({ pending: true });
     session.me = null; go('/login', { replace: true });
   }
   // these leave the app, so the confirmation happens before
@@ -106,9 +109,10 @@
 
   <div class="sgroup">
     <h2>Sicherheit und Daten</h2>
-    <div class="srow"><div class="l"><div>Abmelden<small>Nur auf diesem Gerät.</small></div></div><button class="btn btn-line" onclick={() => logout(false)}>Abmelden</button></div>
+    <div class="srow"><div class="l"><div>Abmelden<small>Nur auf diesem Gerät. Ein gespeicherter Entwurf wird dabei gelöscht.</small></div></div><button class="btn btn-line" onclick={() => logout(false)}>Abmelden</button></div>
     <div class="srow"><div class="l"><div>Überall abmelden<small>Beendet die Anmeldung auf allen Geräten, auch diesem.</small></div></div><button class="btn btn-line" onclick={() => logout(true)}>Überall abmelden</button></div>
     <div class="srow"><div class="l"><div>Daten exportieren<small>Alle Einträge, Grows und Fotos als ZIP mit JSON-Datei.</small></div></div><button class="btn btn-line" onclick={exportData}>Export laden</button></div>
+    <div class="srow"><div class="l"><div>Kontakt<small>Fragen, Hinweise oder Widerspruch gegen eine Moderationsentscheidung.</small></div></div><a class="btn btn-line" href="/kontakt">Schreiben</a></div>
   </div>
 
   <div class="sgroup">

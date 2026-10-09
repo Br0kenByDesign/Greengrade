@@ -27,6 +27,7 @@ type Config struct {
 	EmailPepper    []byte // HMAC key for e-mail hashes. Never change it.
 	AdminEmails    []string
 	ModerationMail string
+	ContactMail    string // receives messages from the contact form; empty disables the form
 	TrustedProxies []*net.IPNet
 	Secure         bool // cookies with Secure flag / HSTS
 	PrivacyURL     string
@@ -85,10 +86,11 @@ func Load() (*Config, error) {
 		DatabaseURL:    env("DATABASE_URL", ""),
 		DataDir:        env("DATA_DIR", "/data"),
 		ModerationMail: env("MODERATION_EMAIL", ""),
+		ContactMail:    env("CONTACT_EMAIL", ""),
 		PrivacyURL:     env("PRIVACY_URL", ""),
 		ImprintURL:     env("IMPRINT_URL", ""),
 		TermsURL:       env("TERMS_URL", ""),
-		MailProvider:   env("MAIL_PROVIDER", "log"),
+		MailProvider:   env("MAIL_PROVIDER", ""),
 		MailFrom:       env("MAIL_FROM", ""),
 
 		GraphTenantID:     env("GRAPH_TENANT_ID", ""),
@@ -162,8 +164,17 @@ func Load() (*Config, error) {
 			return nil, errors.New("MAIL_PROVIDER=smtp braucht SMTP_HOST und MAIL_FROM")
 		}
 	case "log":
+		// The log contains working sign-in links. Only allowed locally or when explicitly forced.
+		if u.Hostname() != "localhost" && u.Hostname() != "127.0.0.1" && env("ALLOW_LOG_MAIL", "") != "1" {
+			return nil, errors.New("MAIL_PROVIDER=log schreibt gültige Anmeldelinks ins Log und ist nur für localhost gedacht. Setze MAIL_PROVIDER=graph oder smtp (oder zum Testen ALLOW_LOG_MAIL=1)")
+		}
+	case "":
+		return nil, errors.New("MAIL_PROVIDER fehlt: graph, smtp oder (nur lokal) log")
 	default:
 		return nil, errors.New("MAIL_PROVIDER muss graph, smtp oder log sein")
+	}
+	if c.ContactMail != "" && !strings.Contains(c.ContactMail, "@") {
+		return nil, errors.New("CONTACT_EMAIL ist keine E-Mail-Adresse")
 	}
 	return c, nil
 }

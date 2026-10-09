@@ -12,10 +12,13 @@ RUN npm run build
 # 2) Go binary with embedded web app
 FROM golang:1.26-alpine AS build
 WORKDIR /src/app
-COPY app/go.mod app/go.sum* ./
+# go.sum pins every dependency by checksum. The build never changes it: if go.mod and go.sum
+# do not match, it stops instead of silently resolving other versions (see README).
+COPY app/go.mod app/go.sum ./
+RUN go mod download && go mod verify
 COPY app/ ./
 COPY --from=web /src/app/webui/dist ./webui/dist
-RUN go mod tidy && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/greengrade . \
+RUN CGO_ENABLED=0 go build -mod=readonly -trimpath -ldflags="-s -w" -o /out/greengrade . \
  && mkdir -p /out/data/photos
 
 # 3) Minimal runtime: no shell, no package manager, non-root

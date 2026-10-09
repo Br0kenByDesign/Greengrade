@@ -11,7 +11,7 @@
   let step = $state('start'), email = $state(''), emailHint = $state(''), busy = $state(false), err = $state(''), info = $state('');
   let token = $state(''), name = $state(''), age = $state(false), consent = $state(false), countdown = $state(0);
   let code = $state('');
-  let providers = $state([]), privacyUrl = $state(''), imprintUrl = $state(''), termsUrl = $state('');
+  let providers = $state([]), privacyUrl = $state(''), imprintUrl = $state(''), termsUrl = $state(''), contact = $state(false);
 
   // capture one-time tokens from the URL fragment and remove them from the address bar immediately
   if (route.path === '/auth/verify' && route.hash) { token = route.hash; step = 'verify'; clearHash(); }
@@ -28,7 +28,7 @@
   }
   if (route.query.get('fehler')) err = 'Die Anmeldung beim Anbieter hat nicht geklappt. Bitte versuche es erneut.';
 
-  api('/api/auth/config').then(c => { providers = c.providers; privacyUrl = c.privacyUrl; imprintUrl = c.imprintUrl; termsUrl = c.termsUrl || ''; }).catch(() => {});
+  api('/api/auth/config').then(c => { providers = c.providers; privacyUrl = c.privacyUrl; imprintUrl = c.imprintUrl; termsUrl = c.termsUrl || ''; contact = !!c.contact; }).catch(() => {});
 
   function maskEmail(e) {
     const [local, domain] = e.trim().toLowerCase().split('@');
@@ -103,7 +103,7 @@
         {/if}
       </div>
       {#if err}<p class="err" style="margin-top:16px">{err}</p>{/if}
-      {#if privacyUrl || imprintUrl || termsUrl}<small class="row-actions" style="display:flex;gap:6px 16px;flex-wrap:wrap">{#if imprintUrl}<a href={imprintUrl} target="_blank" rel="noopener">Impressum</a>{/if}{#if privacyUrl}<a href={privacyUrl} target="_blank" rel="noopener">Datenschutz</a>{/if}{#if termsUrl}<a href={termsUrl} target="_blank" rel="noopener">Nutzungsbedingungen</a>{/if}</small>{/if}
+      {#if privacyUrl || imprintUrl || termsUrl || contact}<small class="row-actions" style="display:flex;gap:6px 16px;flex-wrap:wrap">{#if imprintUrl}<a href={imprintUrl} target="_blank" rel="noopener">Impressum</a>{/if}{#if privacyUrl}<a href={privacyUrl} target="_blank" rel="noopener">Datenschutz</a>{/if}{#if termsUrl}<a href={termsUrl} target="_blank" rel="noopener">Nutzungsbedingungen</a>{/if}{#if contact}<a href="/kontakt">Kontakt</a>{/if}</small>{/if}
       <small>Deine E-Mail-Adresse speichern wir nicht, nur einen nicht umkehrbaren Fingerabdruck davon. {#if providers.length}Bei Social Login erfährt der Anbieter nur, dass du dich bei greengrade anmeldest - nicht, was du einträgst.{/if}</small>
     {:else if step === 'sent'}
       <div class="mailicon"><Icon name="mail" size={26} /></div>

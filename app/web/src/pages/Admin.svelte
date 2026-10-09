@@ -30,7 +30,7 @@
   }
   async function unban(b) {
     if (!confirm(`Sperre für Konto ${b.key} aufheben?`)) return;
-    try { await api(`/api/admin/users/${b.id}/unban`, { method: 'POST' }); notify('Sperre aufgehoben.'); loadBans(); } catch (e) { err = e.message; }
+    try { await api(`/api/admin/bans/${b.key}/unban`, { method: 'POST' }); notify('Sperre aufgehoben.'); loadBans(); } catch (e) { err = e.message; }
   }
   async function rename(s) {
     const n = prompt('Neuer Name:', s.name); if (!n) return;
@@ -88,7 +88,7 @@
   <p class="lead" style="margin-top:0">Gesperrte Konten können ihr privates Logbuch weiter nutzen, aber nichts öffentlich teilen.</p>
   {#if !bans}<div class="spinner"></div>{:else if !bans.length}<p class="muted">Keine Sperren.</p>{/if}
   <div class="timeline" style="max-width:760px">
-    {#each bans || [] as b (b.id)}
+    {#each bans || [] as b (b.key)}
       <div class="tl" style="grid-template-columns:1fr auto"><span><b style="font-weight:500">Konto {b.key}</b><br><span class="muted" style="font-size:13px">Seit {date(b.since)}{b.reason ? `, ${b.reason}` : ''}, {b.strikes}× ausgeblendet</span></span><button class="btn btn-line" onclick={() => unban(b)}>Sperre aufheben</button></div>
     {/each}
   </div>
@@ -105,6 +105,7 @@
   </div>
 {:else}
   <div class="toolbar"><label class="search"><input placeholder="Sorte suchen" aria-label="Sorte suchen" bind:value={q} oninput={loadStrains}></label></div>
+  <p class="muted" style="font-size:13px;margin:-6px 0 14px">Hier erscheinen nur Sorten mit öffentlichen Bewertungen oder offenen Meldungen. Namen, die nur in privaten Logbüchern stehen, bleiben privat.</p>
   {#if mergeFrom}<div class="note warn" style="margin-bottom:14px"><span>Wähle die Ziel-Sorte, in die <b>{mergeFrom.name}</b> überführt werden soll. <button class="linkbtn" onclick={() => (mergeFrom = null)}>Abbrechen</button></span></div>{/if}
   {#if pinFor}
     <div class="inline-form" style="margin-bottom:16px">
@@ -119,7 +120,7 @@
   {/if}
   <div class="timeline" style="max-width:860px">
     {#each strains as s (s.id)}
-      <div class="tl" style="grid-template-columns:1fr auto auto"><span><b style="font-weight:500">{s.name}</b><br><span class="muted" style="font-size:13px">{s.entries} Einträge, {s.ratings} öffentlich</span></span>
+      <div class="tl" style="grid-template-columns:1fr auto auto"><span><b style="font-weight:500">{s.name}</b><br><span class="muted" style="font-size:13px">{s.ratings} öffentliche Bewertungen</span></span>
         <span class="muted" style="font-size:13px">{s.pinnedPhotoId ? 'Titelbild gesetzt' : ''}</span>
         <span class="row-actions">
           {#if mergeFrom && mergeFrom.id !== s.id}<button class="btn btn-primary" onclick={() => merge(s)}>Hierhin</button>

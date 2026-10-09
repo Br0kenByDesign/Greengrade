@@ -1,4 +1,5 @@
 <script>
+  import { DRAFT_KEY } from '../lib/local.js';
   import { api, photoURL } from '../lib/api.js';
   import { session } from '../lib/session.svelte.js';
   import { route, go } from '../lib/router.svelte.js';
@@ -14,7 +15,7 @@
 
   let { params } = $props();
   const editId = params.id || null;
-  const DRAFT = 'gg-draft';
+  const DRAFT = DRAFT_KEY;
 
   const blankTasting = () => ({ tastedOn: today(), method: 'Vaporizer', temperature: '', onsetMin: '', durationH: '', smell: 0, taste: 0, look: 0, effect: 0, quality: 0, aromas: [], flavors: [], effects: [], sideEffects: [], daytime: [], note: '' });
   let f = $state({ strainName: '', source: 'pharmacy', form: 'flower', genetics: 50, growId: '', notes: '', rebuy: false, details: { terpenes: [] } });

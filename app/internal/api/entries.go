@@ -493,17 +493,21 @@ func (s *Server) handleEntryCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u, ctx := current(r), r.Context()
-	var n int
-	if err := s.db.QueryRow(ctx, `SELECT count(*) FROM entries WHERE user_id=$1`, u.ID).Scan(&n); err != nil || n >= 5000 {
-		writeErr(w, errBad("Du hast die maximale Anzahl an Einträgen erreicht."))
-		return
-	}
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		internal(w, err)
 		return
 	}
 	defer tx.Rollback(ctx)
+	if err := lockUser(ctx, tx, u.ID); err != nil {
+		internal(w, err)
+		return
+	}
+	var n int
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM entries WHERE user_id=$1`, u.ID).Scan(&n); err != nil || n >= 5000 {
+		writeErr(w, errBad("Du hast die maximale Anzahl an Einträgen erreicht."))
+		return
+	}
 	if err := s.checkGrow(ctx, tx, u.ID, in.GrowID); err != nil {
 		writeErr(w, err)
 		return
@@ -710,6 +714,10 @@ func (s *Server) handleTastingCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback(ctx)
+	if err := lockUser(ctx, tx, u.ID); err != nil {
+		internal(w, err)
+		return
+	}
 	var n int
 	if err := tx.QueryRow(ctx, `SELECT (SELECT count(*) FROM tastings WHERE entry_id=e.id) FROM entries e WHERE e.id=$1 AND e.user_id=$2`, id, u.ID).Scan(&n); err != nil {
 		writeErr(w, err)
@@ -990,10 +998,28 @@ func (s *Server) handlePhotoUpload(w http.ResponseWriter, r *http.Request) {
 		internal(w, err)
 		return
 	}
+	// Count again under a per-user lock: the first check runs before the slow image processing,
+	// so parallel uploads could otherwise all pass it.
 	var pid string
-	if err := s.db.QueryRow(ctx, `INSERT INTO photos(user_id, entry_id, width, height, content_hash) VALUES ($1,$2,$3,$4,$5) RETURNING id`,
-		u.ID, id, res.Width, res.Height, res.Hash).Scan(&pid); err != nil {
-		internal(w, err)
+	err = pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		if err := lockUser(ctx, tx, u.ID); err != nil {
+			return err
+		}
+		if err := tx.QueryRow(ctx, `SELECT (SELECT count(*) FROM photos WHERE entry_id=$1), (SELECT count(*) FROM photos WHERE user_id=$2)`,
+			id, u.ID).Scan(&perEntry, &perUser); err != nil {
+			return err
+		}
+		if perEntry >= 12 {
+			return errBad("Pro Eintrag sind höchstens 12 Fotos möglich.")
+		}
+		if perUser >= 2000 {
+			return errBad("Du hast die maximale Anzahl an Fotos erreicht.")
+		}
+		return tx.QueryRow(ctx, `INSERT INTO photos(user_id, entry_id, width, height, content_hash) VALUES ($1,$2,$3,$4,$5) RETURNING id`,
+			u.ID, id, res.Width, res.Height, res.Hash).Scan(&pid)
+	})
+	if err != nil {
+		writeErr(w, err)
 		return
 	}
 	if err := s.photos.Save(pid, res); err != nil {
@@ -1057,4 +1083,10 @@ func (s *Server) handlePhotoGet(w http.ResponseWriter, r *http.Request) {
 	h.Set("Content-Disposition", "inline")
 	h.Set("ETag", fmt.Sprintf(`"%s-%t-%x"`, id[:8], thumb, st.ModTime().UnixNano()))
 	http.ServeContent(w, r, "", st.ModTime(), f)
+}
+
+// lockUser serialises count-then-insert limits per account until the transaction ends.
+func lockUser(ctx context.Context, tx pgx.Tx, userID string) error {
+	_, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('gg-user:' || $1, 0))`, userID)
+	return err
 }

@@ -195,7 +195,10 @@ func (s *Store) Walk(fn func(id string)) {
 		}
 		n := d.Name()
 		if strings.HasSuffix(n, ".tmp") {
-			os.Remove(p)
+			// only leftovers: a write in progress takes milliseconds, never 10 minutes
+			if info, err := d.Info(); err == nil && time.Since(info.ModTime()) > 10*time.Minute {
+				os.Remove(p)
+			}
 			return nil
 		}
 		if strings.HasSuffix(n, ".jpg") && !strings.HasSuffix(n, "_t.jpg") {

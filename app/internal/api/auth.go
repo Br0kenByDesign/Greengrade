@@ -46,7 +46,7 @@ func (s *Server) rateOK(ctx context.Context, key string, limit int, window time.
 }
 
 func (s *Server) handleAuthConfig(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"providers": s.oauth.Enabled(), "privacyUrl": s.cfg.PrivacyURL, "imprintUrl": s.cfg.ImprintURL, "termsUrl": s.cfg.TermsURL})
+	writeJSON(w, http.StatusOK, map[string]any{"providers": s.oauth.Enabled(), "privacyUrl": s.cfg.PrivacyURL, "imprintUrl": s.cfg.ImprintURL, "termsUrl": s.cfg.TermsURL, "contact": s.cfg.ContactMail != ""})
 }
 
 func (s *Server) handleChallenge(w http.ResponseWriter, r *http.Request) {

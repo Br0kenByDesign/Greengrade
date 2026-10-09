@@ -1,6 +1,7 @@
 import { session } from './session.svelte.js';
 import { go } from './router.svelte.js';
 import { requestReauth } from './reauth.svelte.js';
+import { clearPersonal } from './local.js';
 
 export class ApiError extends Error {
   constructor(status, message) { super(message); this.status = status; }
@@ -21,7 +22,9 @@ export async function api(path, { method = 'GET', body, form } = {}) {
     if (await refresh()) res = await fetch(path, opts);
     if (res.status === 401) {
       session.me = null;
-      if (!location.pathname.startsWith('/login') && !location.pathname.startsWith('/auth/')) go('/login');
+      clearPersonal(); // the sign-in has ended (expired or signed out elsewhere)
+      // pages that work without an account stay where they are
+      if (!/^\/(login|auth\/|kontakt)/.test(location.pathname)) go('/login');
       throw new ApiError(401, 'Bitte melde dich an.');
     }
   }
@@ -43,7 +46,10 @@ export async function api(path, { method = 'GET', body, form } = {}) {
 }
 
 export async function loadMe() {
-  try { session.me = await api('/api/me'); } catch { session.me = null; }
+  try { session.me = await api('/api/me'); } catch (e) {
+    session.me = null;
+    if (e?.status === 401) clearPersonal(); // not signed in any more: drop leftovers on this device
+  }
   session.loaded = true;
   return session.me;
 }

@@ -514,18 +514,39 @@ func (s *Server) handleAdminBans(w http.ResponseWriter, r *http.Request) {
 			internal(w, err)
 			return
 		}
-		out = append(out, map[string]any{"id": id, "key": anonKey(&id), "since": since, "reason": reason, "strikes": strikes})
+		out = append(out, map[string]any{"key": anonKey(&id), "since": since, "reason": reason, "strikes": strikes})
 	}
 	writeJSON(w, http.StatusOK, out)
 }
 
+// handleAdminUnban takes the anonymous account key, so the admin UI never sees real user ids.
+// The key is resolved among the (few) banned accounts only.
 func (s *Server) handleAdminUnban(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r)
-	if !ok {
+	key := strings.ToUpper(r.PathValue("key"))
+	ctx := r.Context()
+	rows, err := s.db.Query(ctx, `SELECT id::text FROM users WHERE share_banned_at IS NOT NULL`)
+	if err != nil {
+		internal(w, err)
 		return
 	}
-	ctx := r.Context()
-	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+	var matches []string
+	for rows.Next() {
+		var uid string
+		if rows.Scan(&uid) == nil && anonKey(&uid) == key {
+			matches = append(matches, uid)
+		}
+	}
+	rows.Close()
+	if len(matches) == 0 {
+		writeErr(w, pgx.ErrNoRows)
+		return
+	}
+	if len(matches) > 1 {
+		writeErr(w, errBad("Die Kennung ist nicht eindeutig. Bitte hebe die Sperre direkt in der Datenbank auf."))
+		return
+	}
+	id := matches[0]
+	err = pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, `UPDATE users SET share_banned_at=NULL, share_ban_reason='' WHERE id=$1 AND share_banned_at IS NOT NULL`, id)
 		if err != nil {
 			return err

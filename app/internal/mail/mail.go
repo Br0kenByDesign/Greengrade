@@ -33,6 +33,7 @@ import (
 
 type Message struct {
 	To      string
+	ReplyTo string // optional, validated by the caller
 	Subject string
 	Text    string
 	HTML    string
@@ -48,8 +49,10 @@ func New(c *config.Config) (Sender, error) {
 		return newGraph(c)
 	case "smtp":
 		return &smtpSender{c: c}, nil
-	default:
+	case "log":
 		return logSender{}, nil
+	default:
+		return nil, fmt.Errorf("unbekannter MAIL_PROVIDER %q", c.MailProvider)
 	}
 }
 
@@ -181,6 +184,9 @@ func (g *graphSender) Send(ctx context.Context, m Message) error {
 		// Important: no copy in "Sent Items" - otherwise the mailbox would collect every address.
 		"saveToSentItems": false,
 	}
+	if m.ReplyTo != "" {
+		body["message"].(map[string]any)["replyTo"] = []any{map[string]any{"emailAddress": map[string]string{"address": m.ReplyTo}}}
+	}
 	buf, _ := json.Marshal(body)
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost,
 		"https://graph.microsoft.com/v1.0/users/"+url.PathEscape(g.c.MailFrom)+"/sendMail", bytes.NewReader(buf))
@@ -249,6 +255,9 @@ func (s *smtpSender) Send(ctx context.Context, m Message) error {
 	var b strings.Builder
 	b.WriteString("From: greengrade <" + s.c.MailFrom + ">\r\n")
 	b.WriteString("To: " + m.To + "\r\n")
+	if m.ReplyTo != "" {
+		b.WriteString("Reply-To: " + m.ReplyTo + "\r\n")
+	}
 	b.WriteString("Subject: " + mime.QEncoding.Encode("utf-8", m.Subject) + "\r\n")
 	b.WriteString("Date: " + time.Now().Format(time.RFC1123Z) + "\r\n")
 	b.WriteString("MIME-Version: 1.0\r\nContent-Type: multipart/alternative; boundary=" + boundary + "\r\n\r\n")

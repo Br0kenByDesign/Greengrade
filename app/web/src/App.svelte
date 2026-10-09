@@ -19,6 +19,7 @@
   import Admin from './pages/Admin.svelte';
   import NotFound from './pages/NotFound.svelte';
   import ReauthDialog from './components/ReauthDialog.svelte';
+  import Contact from './pages/Contact.svelte';
 
   const routes = [
     ['/', Dashboard], ['/entries/new', EntryForm], ['/entries/:id/edit', EntryForm], ['/entries/:id', EntryDetail],
@@ -26,6 +27,7 @@
     ['/public', Public], ['/public/:id', PublicStrain], ['/account', Account], ['/admin', Admin]
   ];
   const isAuth = $derived(route.path === '/login' || route.path.startsWith('/auth/'));
+  const isContact = $derived(route.path === '/kontakt'); // reachable without an account
   const current = $derived.by(() => {
     for (const [p, c] of routes) { const params = match(p, route.path); if (params) return { c, params }; }
     return { c: NotFound, params: {} };
@@ -36,7 +38,7 @@
   const inOverview = $derived(route.path === '/' || route.path === '/stats' || route.path === '/compare');
   const unread = $derived(session.me?.notices?.filter(n => !n.read).length || 0);
 
-  loadMe().then(me => { if (!me && !isAuth) go('/login', { replace: true }); });
+  loadMe().then(me => { if (!me && !isAuth && !isContact) go('/login', { replace: true }); });
 
   // in-app navigation for plain links
   function onclick(e) {
@@ -55,6 +57,8 @@
 
 {#if isAuth}
   <Auth />
+{:else if isContact}
+  <Contact />
 {:else if !session.loaded}
   <div class="spinner" role="status" aria-label="Lädt"></div>
 {:else if session.me}
