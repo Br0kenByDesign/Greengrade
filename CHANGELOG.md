@@ -2,6 +2,22 @@
 
 Alle nennenswerten Änderungen an greengrade. Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), die Versionen an [Semantic Versioning](https://semver.org/lang/de/).
 
+## [1.4.0] - 2026-10-09
+
+### Neu
+- **Kontaktformular** unter `/kontakt`, auch ohne Konto. Nachrichten werden nicht gespeichert, sondern per Mail an `CONTACT_EMAIL` weitergeleitet (Antwortadresse = Absender). Geschützt durch die Rechenaufgabe im Browser und Anfragebegrenzungen. Verlinkt im Footer, im Impressum, auf der Anmeldeseite und im Konto. Taugt als zweiter schneller Kontaktweg nach § 5 DDG.
+- **Suchmaschinen und Link-Vorschau:** `robots.txt`, `sitemap.xml`, Canonical- und Open-Graph-Tags sowie ein Vorschaubild für die Landingpage. Die Adresse kommt aus `LANDING_URL`.
+
+### Geändert
+- **Abmelden räumt auf:** Entwürfe und Anmeldehinweise werden vom Gerät gelöscht. Liegt ein Entwurf vor, fragt die App vorher. Endet eine Anmeldung auf anderem Weg (abgelaufen, überall abgemeldet), räumt die App beim nächsten Öffnen auf. Design und Installationshinweis bleiben.
+- **`MAIL_PROVIDER` ist Pflicht.** Ohne Angabe startet die App nicht mehr, statt still Anmeldelinks ins Log zu schreiben. `log` geht nur noch mit `localhost` oder ausdrücklich mit `ALLOW_LOG_MAIL=1`.
+- **Moderation sieht weniger:** Die Sortenliste zeigt nur Sorten mit öffentlichen Bewertungen oder offenen Meldungen, ohne Anzahl privater Einträge. Sperren werden über die anonyme Kennung aufgehoben, die Oberfläche bekommt keine echten Konto-IDs mehr.
+- **Reproduzierbarer Build:** Das Dockerfile führt kein `go mod tidy` mehr aus, sondern lädt genau die Versionen aus `go.sum` (`go mod download`, `go mod verify`, `-mod=readonly`). `go.sum` gehört ins Repository.
+
+### Behoben
+- Mengen-Limits (Einträge, Verkostungen, Fotos) ließen sich mit parallelen Anfragen leicht überschreiten. Sie werden jetzt pro Konto unter Sperre geprüft.
+- Die stündliche Aufräumroutine konnte die temporäre Datei eines gerade laufenden Uploads löschen. Sie entfernt nur noch Reste, die älter als 10 Minuten sind.
+
 ## [1.3.0] - 2026-10-09
 
 ### Neu
@@ -95,6 +111,7 @@ Erste Version.
 - Datenexport und sofortiges Löschen des Kontos
 - Statische Landingpage, drei gehärtete Container mit Docker Compose
 
+[1.4.0]: https://github.com/Br0kenByDesign/Greengrade/releases/tag/v1.4.0
 [1.3.0]: https://github.com/Br0kenByDesign/Greengrade/releases/tag/v1.3.0
 [1.2.0]: https://github.com/Br0kenByDesign/Greengrade/releases/tag/v1.2.0
 [1.1.0]: https://github.com/Br0kenByDesign/Greengrade/releases/tag/v1.1.0

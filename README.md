@@ -3,11 +3,6 @@
 <h1 align="center">greengrade</h1>
 
 <p align="center">Ein privates Logbuch zum Bewerten von Cannabis aus Apotheke und eigenem Grow.<br>Selbst gehostet, ohne Passwörter, mit optionalen anonymen öffentlichen Bewertungen.</p>
-<p align="center">
-  <a href="https://greengrade.cloud">greengrade.cloud</a><br>
-  <a href="https://app.greengrade.cloud"">app.greengrade.cloud</a><br>
-  <a href="https://status.greengrade.cloud"">status.greengrade.cloud</a>
-</p>
 
 ---
 
@@ -104,6 +99,12 @@ cd greengrade
 cp .env.example .env
 ```
 
+Der Build verlangt eine zu `go.mod` passende `go.sum`. Sie ist im Repository enthalten. Fehlt sie in einem Fork oder nach einer Änderung an den Abhängigkeiten, erzeugst du sie ohne lokales Go mit Docker:
+
+```bash
+docker run --rm -v "$PWD/app":/src -w /src golang:1.26-alpine go mod tidy
+```
+
 Secrets erzeugen und in `.env` eintragen:
 
 ```bash
@@ -120,7 +121,7 @@ docker compose up -d --build
 docker compose logs -f app
 ```
 
-Zum Ausprobieren ohne Mailserver kann `MAIL_PROVIDER=log` gesetzt werden. Die Anmeldelinks erscheinen dann im Log. **Nicht im Produktivbetrieb verwenden.**
+Zum lokalen Ausprobieren ohne Mailserver gibt es `MAIL_PROVIDER=log`: Die Anmeldelinks erscheinen dann im Log. Weil damit jeder mit Zugriff auf die Logs Konten übernehmen kann, startet die App mit `log` nur, wenn `APP_ORIGIN` auf `localhost` zeigt (oder `ALLOW_LOG_MAIL=1` gesetzt ist). Ohne `MAIL_PROVIDER` startet sie gar nicht.
 
 ## Konfiguration
 
@@ -133,11 +134,12 @@ Alle Einstellungen stehen kommentiert in [`.env.example`](.env.example). Die wic
 | `APP_SECRET` | Signiert die Anmelde-Tokens. Ändern meldet alle ab. |
 | `EMAIL_PEPPER` | Schlüssel für die E-Mail-Fingerabdrücke. Darf nie verloren gehen oder sich ändern. |
 | `POSTGRES_PASSWORD` | Datenbankpasswort |
-| `MAIL_PROVIDER` | `smtp`, `graph` oder `log` |
+| `MAIL_PROVIDER` | `smtp`, `graph` oder `log` (nur lokal). Pflicht. |
 | `ADMIN_EMAILS` | Konten mit Zugriff auf die Moderation (kommagetrennt) |
 | `MODERATION_EMAIL` | Erhält bei jeder Meldung eine kurze Benachrichtigung |
+| `CONTACT_EMAIL` | Aktiviert das Kontaktformular unter `/kontakt` und erhält die Nachrichten. Leer = kein Formular. |
 | `PRIVACY_URL`, `IMPRINT_URL`, `TERMS_URL` | Links zu Datenschutz, Impressum und Nutzungsbedingungen in der App |
-| `LANDING_URL` | Adresse der Landingpage, z. B. `https://example.com` |
+| `LANDING_URL` | Adresse der Landingpage, z. B. `https://example.com`. Wird für Sitemap, `robots.txt` und Link-Vorschauen eingesetzt. |
 | `COMPOSE_PROFILES`, `STATUS_URL` | Statusseite aktivieren und auf der Landingpage verlinken (siehe unten) |
 | `OAUTH_*` | Zugangsdaten für Social Login, leer = deaktiviert |
 | `TRUSTED_PROXIES` | Netze, deren `X-Forwarded-For` vertraut wird |
@@ -209,6 +211,14 @@ Läuft die Statusseite auf demselben Server wie die App, fällt sie mit ihm aus.
 ## Eigene Seiten für die Landingpage
 
 Dateien in `landing/local/` überschreiben beim Build die gleichnamigen Dateien aus `landing/site/`. Dort gehören z. B. dein ausgefülltes `impressum.html`, `datenschutz.html` und `nutzungsbedingungen.html` hin. Der Ordner wird von git ignoriert, so bleiben persönliche Angaben aus dem Repository heraus.
+
+Beim Build werden in allen Seiten `__APP_URL__` (aus `APP_ORIGIN`), `__SITE_URL__` (aus `LANDING_URL`) und `__STATUS_URL__` ersetzt, auch in deinen eigenen Dateien. Zeilen mit `data-optional="status"` bzw. `data-optional="contact"` entfallen, wenn keine Statusseite bzw. kein Kontaktformular eingerichtet ist.
+
+Die Landingpage bringt `robots.txt`, `sitemap.xml` und Open-Graph-Tags mit Vorschaubild (`og.jpg`) mit. Impressum, Datenschutz und Nutzungsbedingungen sind auf `noindex` gesetzt, die App ebenfalls.
+
+## Kontaktformular
+
+Mit `CONTACT_EMAIL` gibt es unter `APP_ORIGIN/kontakt` ein Formular, das auch ohne Konto funktioniert. Es dient z. B. als zweiter schneller Kontaktweg neben der E-Mail-Adresse im Impressum (§ 5 DDG). Nachrichten werden nicht gespeichert, sondern über den eingestellten Mailversand an `CONTACT_EMAIL` geschickt, mit der Absenderadresse als Antwortadresse. Mails gehen nur an dich, nie an die eingegebene Adresse. Schutz: Rechenaufgabe im Browser, 3 Nachrichten pro Stunde und IP, 50 pro Tag insgesamt.
 
 ## Mailversand
 

@@ -55,6 +55,8 @@ services:
       args:
         APP_URL: ${APP_ORIGIN:?APP_ORIGIN fehlt in .env}
         STATUS_URL: ${STATUS_URL:-}
+        SITE_URL: ${LANDING_URL:?LANDING_URL fehlt in .env}
+        CONTACT_FORM: ${CONTACT_EMAIL:+1}   # "1" when the contact form is enabled
     image: greengrade-landing:latest
     restart: unless-stopped
     networks: [proxy]
