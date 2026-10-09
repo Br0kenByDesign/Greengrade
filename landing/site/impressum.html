@@ -15,10 +15,13 @@
 <p>[Vorname Nachname]<br>[Straße Hausnummer]<br>[PLZ Ort]<br>Deutschland</p>
 
 <h2>Kontakt</h2>
-<p>E-Mail: [kontakt@example.com]<br>Telefon: [+49 ...] [Zweiter schneller Kontaktweg neben E-Mail, z. B. Telefonnummer oder Link zu einem Kontaktformular.]</p>
+<p>E-Mail: [kontakt@example.com]</p>
+<p data-optional="contact">Kontaktformular: <a href="__APP_URL__/kontakt">__APP_URL__/kontakt</a></p>
+<p class="todo">[Das Formular erscheint, wenn CONTACT_EMAIL gesetzt ist. Ohne Formular brauchst du einen anderen zweiten schnellen Kontaktweg, z. B. eine Telefonnummer.]</p>
 
 <h2>Kontaktstelle nach dem Digital Services Act</h2>
 <p>Zentrale Kontaktstelle für Behörden, die EU-Kommission und das Gremium für digitale Dienste (Art. 11 DSA) sowie für Nutzerinnen und Nutzer (Art. 12 DSA):<br>E-Mail: [kontakt@example.com]<br>Sprachen: Deutsch und Englisch</p>
+<p data-optional="contact">Alternativ erreichst du die Kontaktstelle über das <a href="__APP_URL__/kontakt">Kontaktformular</a>.</p>
 <p>Die Kontaktstelle wird von einem Menschen betreut, nicht von automatisierten Werkzeugen.</p>
 
 <h2>Verantwortlich für den Inhalt nach § 18 Abs. 2 MStV</h2>
@@ -32,7 +35,6 @@
 <p>Rechtswidrige Inhalte kannst du direkt in der App über "Melden" oder per E-Mail an [moderation@example.com] melden. Welche Inhalte nicht erlaubt sind und wie wir moderieren, steht in den <a href="/nutzungsbedingungen.html">Nutzungsbedingungen</a>.</p>
 </main>
 </main>
-</main>
 <footer class="foot">
   <span>greengrade ist nur für Personen ab 18 Jahren.</span>
   <nav>
@@ -42,6 +44,7 @@
     <a href="/impressum.html">Impressum</a>
     <a href="/datenschutz.html">Datenschutz</a>
     <a href="/nutzungsbedingungen.html">Nutzungsbedingungen</a>
+    <a href="__APP_URL__/kontakt" data-optional="contact">Kontakt</a>
   </nav>
 </footer>
 </div>
