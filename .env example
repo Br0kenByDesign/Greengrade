@@ -19,7 +19,8 @@ POSTGRES_PASSWORD=
 PROXY_NETWORK=proxy
 
 # ---------- Mail (required for sign-in links) ----------
-# smtp | graph (Microsoft 365) | log (development only: prints sign-in links to the log!)
+# Required: smtp | graph (Microsoft 365) | log (development only: prints sign-in links to the log,
+# refused unless APP_ORIGIN is localhost or ALLOW_LOG_MAIL=1)
 MAIL_PROVIDER=smtp
 MAIL_FROM=noreply@example.com
 
@@ -43,7 +44,9 @@ GRAPH_CLIENT_SECRET=
 ADMIN_EMAILS=
 # Receives a short notification for every report
 MODERATION_EMAIL=
-# Address of the landing page (used by the status page)
+# Enables the contact form at APP_ORIGIN/kontakt and receives its messages (empty = no form)
+CONTACT_EMAIL=
+# Address of the landing page (status page, sitemap, link previews)
 LANDING_URL=https://example.com
 
 # Optional status page (Gatus, see gatus/config.yaml). Uncomment both lines to enable it.
@@ -53,6 +56,7 @@ LANDING_URL=https://example.com
 # Shown at sign-up and on the login page
 PRIVACY_URL=https://example.com/datenschutz.html
 IMPRINT_URL=https://example.com/impressum.html
+TERMS_URL=https://example.com/nutzungsbedingungen.html
 
 # Social login - leave empty to disable a provider.
 # Redirect URI: <APP_ORIGIN>/api/auth/oauth/<google|github|discord>/callback
