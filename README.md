@@ -1,8 +1,6 @@
-<p align="center"> <img width="516" height="113" alt="image" src="https://github.com/user-attachments/assets/c4864973-8446-4520-9732-1af41022da05" /> </p>
+<p align="center"> <img width="100%" alt="Banner" src="https://github.com/user-attachments/assets/5565b802-b609-491a-9f59-55809f528a90" /> </p>
 
 <p align="center"> <a href="https://greengrade.cloud">Website</a> &nbsp;•&nbsp; <a href="https://app.greengrade.cloud">App</a> &nbsp;•&nbsp; <a href="https://status.greengrade.cloud">Status</a> </p>
-
-<p align="center">Ein privates Logbuch zum Bewerten von Cannabis aus Apotheke und eigenem Grow.<br>Selbst gehostet, ohne Passwörter, mit optionalen anonymen öffentlichen Bewertungen.</p>
 
 ---
 
@@ -38,7 +36,7 @@ Die Oberfläche ist auf Deutsch.
 - Zwei Sorten nebeneinander vergleichen
 - Vergleich der eigenen Noten mit dem Community-Durchschnitt
         <p align="center"> <table> <tr> <td>
-        <img width="455" height="419" alt="image" src="https://github.com/user-attachments/assets/187ed6e4-0f60-4c4e-817b-0175fa31cbcf" />
+        <img width="455" height="419" alt="image" src="https://github.com/user-attachments/assets/cf614493-af44-4785-a200-db2b5af52cd8" />
         </td> </tr> </table> </p>
 
 **Öffentliche Bewertungen**
@@ -49,7 +47,7 @@ Die Oberfläche ist auf Deutsch.
 - Rangliste mit gewichtetem Durchschnitt (eine einzelne 10/10 landet nicht sofort oben)
 - Für Sorten ohne Foto wird automatisch eine eigene Illustration erzeugt
         <p align="center"> <table> <tr> <td>
-        <img width="492" height="273" alt="image" src="https://github.com/user-attachments/assets/2f49efb8-9ecf-4fd1-8c9a-093fb4f11761" />
+        <img width="492" height="273" alt="image" src="https://github.com/user-attachments/assets/962e0afe-78dc-4e4f-b600-ca08b846b382"  />
         </td> </tr> </table> </p>
 
 **Moderation**
