@@ -1,5 +1,6 @@
 # Build context: repository root. Purely static - no scripts, no backend.
-FROM nginxinc/nginx-unprivileged:1.29-alpine
+# Stable branch; needs at least nginx 1.30.7 (NGINX2Root fixes). Rebuild with --pull to get patch releases.
+FROM nginxinc/nginx-unprivileged:1.30-alpine
 # Set via APP_ORIGIN and STATUS_URL in .env. Without STATUS_URL the status link is left out.
 ARG APP_URL=https://app.example.com
 ARG STATUS_URL=
