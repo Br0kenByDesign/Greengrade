@@ -4,14 +4,15 @@
 
 ---
 
-greengrade ist eine Web-App (PWA) für Erwachsene, die festhalten wollen, wie ihnen eine Sorte gefallen hat: Geruch, Geschmack, Aussehen, Wirkung und Qualität, dazu Aromen, Terpene und Nebenwirkungen. Alles bleibt privat, bis man eine Bewertung bewusst teilt. Geteilte Bewertungen fließen anonym in öffentliche Sortenseiten ein.
+greengrade ist eine Web-App (PWA) für Erwachsene, die festhalten wollen, wie ihnen eine Sorte gefallen hat: Geruch, Geschmack, Aussehen, Wirkung und Qualität, dazu Aromen, Terpene und Nebenwirkungen. Alles bleibt privat, bis man eine Bewertung bewusst teilt. Geteilte Bewertungen fließen anonym in öffentliche Sortenseiten ein. Auf dem Desktop und mobil.
 
 Die Oberfläche ist auf Deutsch.
 
 ## Funktionen
 
 **Logbuch**
-- Einträge für Apothekensorten (Hersteller, Produkt, THC/CBD, Charge, Bestrahlung, Preis, Apotheke) und eigene Grows (Saatgut, Umgebung, Medium, Zeiten, Ertrag)
+- Einträge für Apothekensorten (Produkt, THC/CBD, Charge, Bestrahlung, Preis, Apotheke) und eigene Grows (Saatgut, Umgebung, Medium, Zeiten, Ertrag)
+- Sorte und Hersteller (Apotheke) bzw. Breeder (eigener Grow) gehören zusammen: dieselbe Sorte von zwei Herstellern wird getrennt bewertet und lässt sich vergleichen
 - Blüten und Extrakte, Einheiten passen sich an (% oder mg/ml)
 - Fünf Teilnoten von 1 bis 10, Gesamtnote, Radar-Diagramm
 - Aromen, Geschmack, Wirkungen, Nebenwirkungen, Terpene und Tageszeit als Tags, auch eigene Begriffe
@@ -41,18 +42,19 @@ Die Oberfläche ist auf Deutsch.
 
 **Öffentliche Bewertungen**
 - Pro Eintrag wählbar: Bewertung öffentlich teilen, optional mit Kommentar und Foto
-- Öffentlich sichtbar sind nur Noten, Kommentar, Foto und der Monat - nie Name, Herkunft oder Konsumdetails
+- Öffentlich sichtbar sind nur Sorte mit Hersteller bzw. Breeder, Noten, Kommentar, Foto und der Monat - nie Name, Apotheke oder Konsumdetails
+- Zum Teilen ist der Hersteller Pflicht, beim eigenen Grow der Breeder oder ausdrücklich "Breeder unbekannt"
 - Sortenseiten mit Durchschnitt, Teilnoten, Verteilung, Kommentaren und Fotos
-- Sortenvorschläge beim Tippen, damit Bewertungen derselben Sorte zusammenfinden
-- Rangliste mit gewichtetem Durchschnitt (eine einzelne 10/10 landet nicht sofort oben)
+- Vorschläge beim Tippen mit Hersteller bzw. Breeder und Vorschaubild, damit Bewertungen derselben Sorte zusammenfinden; Schreibvarianten wie "Bathera GmbH" und "bathera" werden zusammengeführt
+- Rangliste mit gewichtetem Durchschnitt
 - Für Sorten ohne Foto wird automatisch eine eigene Illustration erzeugt
         <p align="center"> <table> <tr> <td>
         <img width="492" height="273" alt="image" src="https://github.com/user-attachments/assets/962e0afe-78dc-4e4f-b600-ca08b846b382"  />
         </td> </tr> </table> </p>
 
 **Moderation**
-- Kommentare, Fotos und Sortennamen melden
-- Moderationsbereich: Meldungen prüfen, Inhalte ausblenden, Sorten umbenennen und zusammenführen, Titelbilder festlegen
+- Kommentare, Fotos, Sorten- und Herstellernamen melden
+- Moderationsbereich: Meldungen prüfen, Inhalte ausblenden, Sorten sowie Hersteller und Breeder umbenennen und zusammenführen, Titelbilder festlegen
 - Ausgeblendete Inhalte bleiben ausgeblendet, auch wenn sie erneut geteilt werden (Fingerabdruck von Text und Foto)
 - Sperre fürs öffentliche Teilen bei wiederholten Verstößen - das private Logbuch bleibt nutzbar
 - Protokoll aller Moderationsentscheidungen; Konten erscheinen dort nur als anonyme Kennung
@@ -78,11 +80,11 @@ Die Oberfläche ist auf Deutsch.
 - **Keine E-Mail-Adressen in der Datenbank.** Gespeichert wird nur ein HMAC-SHA-256-Fingerabdruck mit geheimem Schlüssel.
 - **Magic Links** sind 10 Minuten gültig und nur einmal verwendbar. Das Token steht im URL-Fragment und wird erst per Klick eingelöst, damit Mail-Scanner es nicht verbrauchen.
 - **Passkeys** (WebAuthn): Gespeichert werden nur öffentliche Schlüssel. PIN oder Biometrie sind Pflicht, jede Anmeldung ist nur einmal gültig, und Passkeys, die sich wie eine Kopie verhalten, werden gesperrt.
-- **Social Login** fragt nur die Nutzer-ID ab, keine E-Mail und kein Profil. Konten werden nie automatisch über E-Mail-Adressen verknüpft.
+- **Social Login** fragt die kleinstmögliche Berechtigung an (keine E-Mail) und speichert nur die Nutzer-ID. Profildaten, die der Anbieter trotzdem mitschickt, werden verworfen. Konten werden nie automatisch über E-Mail-Adressen verknüpft.
 - **"Überall abmelden"** und Konto löschen wirken sofort.
 - **Fotos** werden im Browser und auf dem Server neu kodiert. Standort, Aufnahmezeit, Kameradaten und alle anderen Metadaten verschwinden, präparierte Dateien werden neutralisiert. Fotos sind privat, solange sie nicht geteilt werden, und der Browser muss bei jedem Abruf neu nachfragen, ob er sie noch sehen darf. Höchstens zwei Fotos werden gleichzeitig verarbeitet (bis 24 Megapixel), damit Uploads den Server nicht überlasten.
 - **Anmeldecodes** gelten nur auf dem Gerät, das sie angefordert hat, 10 Minuten lang und für höchstens 5 Versuche. Link und Code heben sich gegenseitig auf.
-- **Missbrauchsschutz** ohne Drittanbieter: Proof-of-Work nach dem ALTCHA-Protokoll, Rate-Limits pro IPv4-Adresse bzw. pro IPv6-/64-Netz und pro E-Mail-Fingerabdruck, Filter gegen Links, Telefonnummern und Kontaktangebote in öffentlichen Kommentaren und Sortennamen.
+- **Missbrauchsschutz** ohne Drittanbieter: Proof-of-Work nach dem ALTCHA-Protokoll, Rate-Limits pro IPv4-Adresse bzw. pro IPv6-/64-Netz und pro E-Mail-Fingerabdruck, Filter gegen Links, Telefonnummern und Kontaktangebote in öffentlichen Kommentaren, Sorten- und Herstellernamen.
 - **CSRF-Schutz** über SameSite-Cookies und `Origin`-Prüfung.
 - **Strikte Content-Security-Policy** ohne Inline-Skripte. Schriften sind selbst gehostet, es gibt keine Anfragen an Dritte und kein Tracking.
 - **Datensparsame Logs** ohne IP-Adressen, Query-Strings oder IDs.
@@ -179,7 +181,8 @@ app.example.com {
 ```nginx
 server {
     server_name app.example.com;
-    listen 443 ssl http2;
+    listen 443 ssl;
+    # http2 on;   # optional; nginx/OpenResty aktuell halten (NGINX2Root, November 2026)
     # ssl_certificate ...
     client_max_body_size 20m;
     location / {
@@ -340,6 +343,7 @@ app/
   main.go
   internal/api/         HTTP-Handler
   internal/security/    Tokens, Proof-of-Work, Rate-Limits, Kommentarfilter
+  internal/names/       Schreibweisen von Sorten und Herstellern vereinheitlichen
   internal/media/       Neukodierung von Fotos
   internal/mail/        SMTP, Microsoft Graph, Log
   internal/oauth/       Social Login
