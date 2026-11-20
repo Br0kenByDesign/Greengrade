@@ -327,14 +327,14 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 	var err error
 	if in.Target == "name" {
 		err = s.db.QueryRow(ctx, `INSERT INTO reports(target, reason, details, reporter_id, strain_id, strain_name)
-			SELECT 'name', $2, $3, $4, st.id, st.name FROM strains st WHERE st.id=$1
+			SELECT 'name', $2, $3, $4, st.id, strain_label(st.id) FROM strains st WHERE st.id=$1
 			AND EXISTS (SELECT 1 FROM public_ratings p WHERE p.strain_id=st.id)
 			AND NOT EXISTS (SELECT 1 FROM reports x WHERE x.strain_id=st.id AND x.target='name' AND x.reporter_id=$4 AND x.status='open')
 			RETURNING strain_name`, in.StrainID, in.Reason, details, u.ID).Scan(&strain)
 	} else {
 		// snapshot: the report keeps what was reported, even if the rating is withdrawn later
 		err = s.db.QueryRow(ctx, `INSERT INTO reports(public_rating_id, target, reason, details, reporter_id, strain_id, strain_name, author_id, content, photo_id)
-			SELECT pr.id, $2, $3, $4, $5, st.id, st.name, pr.user_id,
+			SELECT pr.id, $2, $3, $4, $5, st.id, strain_label(st.id), pr.user_id,
 			       CASE WHEN $2='comment' THEN pr.comment END, CASE WHEN $2='photo' THEN pr.photo_id END
 			FROM public_ratings pr JOIN strains st ON st.id=pr.strain_id WHERE pr.id=$1 AND pr.user_id<>$5
 			AND NOT EXISTS (SELECT 1 FROM reports x WHERE x.public_rating_id=pr.id AND x.target=$2 AND x.reporter_id=$5 AND x.status='open')
@@ -373,8 +373,10 @@ func (s *Server) handleAdminReports(w http.ResponseWriter, r *http.Request) {
 		(SELECT count(*) FROM moderation_actions m WHERE m.target_user_id=rp.author_id AND m.action LIKE 'hide_%' AND m.created_at > now() - interval '365 days'),
 		COALESCE((SELECT share_banned_at IS NOT NULL FROM users WHERE id=rp.author_id), false),
 		(SELECT count(*) FROM reports x WHERE x.status='open' AND x.target=rp.target AND
-			((rp.public_rating_id IS NOT NULL AND x.public_rating_id=rp.public_rating_id) OR (rp.target='name' AND x.strain_id=rp.strain_id)))
-		FROM reports rp LEFT JOIN public_ratings pr ON pr.id=rp.public_rating_id
+			((rp.public_rating_id IS NOT NULL AND x.public_rating_id=rp.public_rating_id) OR (rp.target='name' AND x.strain_id=rp.strain_id))),
+		cs.name, cb.name
+		FROM reports rp LEFT JOIN strains cs ON cs.id=rp.strain_id LEFT JOIN breeders cb ON cb.id=cs.breeder_id
+		LEFT JOIN public_ratings pr ON pr.id=rp.public_rating_id
 		WHERE rp.status=$1 ORDER BY rp.created_at DESC LIMIT 200`, status)
 	if err != nil {
 		internal(w, err)
@@ -388,8 +390,9 @@ func (s *Server) handleAdminReports(w http.ResponseWriter, r *http.Request) {
 		var rid, sid, content, photo, author *string
 		var ch, ph, banned bool
 		var strikes, open int
+		var curName, curBreeder *string
 		if err := rows.Scan(&id, &target, &reason, &details, &created, &rid, &sid, &sname, &content, &photo, &author,
-			&ch, &ph, &strikes, &banned, &open); err != nil {
+			&ch, &ph, &strikes, &banned, &open, &curName, &curBreeder); err != nil {
 			internal(w, err)
 			return
 		}
@@ -397,7 +400,8 @@ func (s *Server) handleAdminReports(w http.ResponseWriter, r *http.Request) {
 			"details": details, "createdAt": created, "ratingId": rid, "strainId": sid, "strainName": sname,
 			"content": content, "photoId": photo, "withdrawn": target != "name" && rid == nil,
 			"hidden": (target == "comment" && ch) || (target == "photo" && ph),
-			"author": anonKey(author), "authorStrikes": strikes, "authorBanned": banned, "openReports": open})
+			"author": anonKey(author), "authorStrikes": strikes, "authorBanned": banned, "openReports": open,
+			"currentName": curName, "currentBreeder": curBreeder})
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -408,9 +412,10 @@ func (s *Server) handleAdminResolve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		Action string `json:"action"` // hide | hide_ban | dismiss | rename
-		Note   string `json:"note"`
-		Name   string `json:"name"`
+		Action  string `json:"action"` // hide | hide_ban | dismiss | rename
+		Note    string `json:"note"`
+		Name    string `json:"name"`    // new strain name (optional)
+		Breeder string `json:"breeder"` // new manufacturer or breeder name, changed everywhere (optional)
 	}
 	if !readJSON(w, r, &in) {
 		return
@@ -445,11 +450,37 @@ func (s *Server) handleAdminResolve(w http.ResponseWriter, r *http.Request) {
 			err = errBad("Diese Sorte gibt es nicht mehr.")
 			break
 		}
-		if err = s.renameStrain(ctx, *sid, in.Name, u.ID, reportReasons[reason]); err == nil {
-			err = pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
-				return closeReports(ctx, tx, "hidden", sname, "Der gemeldete Sortenname wurde geändert.", `target='name' AND strain_id=$1`, *sid)
-			})
+		var curName string
+		var curBreeder, bid *string
+		if err = s.db.QueryRow(ctx, `SELECT s.name, b.name, b.id FROM strains s LEFT JOIN breeders b ON b.id=s.breeder_id WHERE s.id=$1`, *sid).
+			Scan(&curName, &curBreeder, &bid); err != nil {
+			break
 		}
+		// reports to close are fixed before renaming: a breeder rename can merge this strain into another
+		var open []string
+		if open, err = s.entryPhotos(ctx, s.db, `SELECT id FROM reports WHERE target='name' AND strain_id=$1 AND status='open'`, *sid); err != nil {
+			break
+		}
+		changed := false
+		if displayName(in.Name) != "" && displayName(in.Name) != curName {
+			if err = s.renameStrain(ctx, *sid, in.Name, u.ID, reportReasons[reason]); err != nil {
+				break
+			}
+			changed = true
+		}
+		if displayName(in.Breeder) != "" && bid != nil && displayName(in.Breeder) != *curBreeder {
+			if err = s.renameBreeder(ctx, *bid, in.Breeder, u.ID, reportReasons[reason]); err != nil {
+				break
+			}
+			changed = true
+		}
+		if !changed {
+			err = errBad("Bitte ändere den Sortennamen oder den Hersteller bzw. Breeder.")
+			break
+		}
+		err = pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+			return closeReports(ctx, tx, "hidden", sname, "Der gemeldete Name wurde geändert.", `id = ANY($1)`, open)
+		})
 	case target != "name" && (in.Action == "hide" || in.Action == "hide_ban"):
 		err = s.moderate(ctx, u.ID, modItem{ReportID: id, RatingID: deref(rid), Target: target, StrainName: sname,
 			AuthorID: deref(author), Content: content, PhotoID: photo}, reason, note, in.Action == "hide_ban")
@@ -484,7 +515,7 @@ func (s *Server) handleAdminHide(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	it := modItem{RatingID: id, Target: in.Target}
-	if err := s.db.QueryRow(ctx, `SELECT st.name, pr.user_id, pr.comment, pr.photo_id FROM public_ratings pr JOIN strains st ON st.id=pr.strain_id WHERE pr.id=$1`, id).
+	if err := s.db.QueryRow(ctx, `SELECT strain_label(pr.strain_id), pr.user_id, pr.comment, pr.photo_id FROM public_ratings pr WHERE pr.id=$1`, id).
 		Scan(&it.StrainName, &it.AuthorID, &it.Content, &it.PhotoID); err != nil {
 		writeErr(w, err)
 		return

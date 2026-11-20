@@ -226,6 +226,23 @@ func CheckStrainName(s string) error {
 	return nil
 }
 
+var ErrBreederChars = errors.New("Hersteller- und Breedernamen dürfen nur Buchstaben, Ziffern, Leerzeichen und # + - . ' & ( ) / ! enthalten.")
+var ErrBreederName = errors.New("Hersteller- und Breedernamen dürfen keine Links, Telefonnummern, Nutzernamen oder Kontakt- und Verkaufsangebote enthalten.")
+
+// CheckBreederName applies to manufacturer and breeder names, which are shown with shared ratings.
+func CheckBreederName(s string) error {
+	for _, r := range s {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == ' ' || strings.ContainsRune("#+-.'’&()/!", r) {
+			continue
+		}
+		return ErrBreederChars
+	}
+	if CheckPublicComment(s) != nil {
+		return ErrBreederName
+	}
+	return nil
+}
+
 func CheckPublicComment(s string) error {
 	if reURL.MatchString(s) || rePhone.MatchString(s) || reHandle.MatchString(s) || reContact.MatchString(s) {
 		return ErrComment

@@ -95,6 +95,7 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 	type top struct {
 		EntryID string  `json:"entryId"`
 		Name    string  `json:"name"`
+		Breeder *string `json:"breeder"`
 		Overall float64 `json:"overall"`
 		Source  string  `json:"source"`
 	}
@@ -132,7 +133,7 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 				monthly[m] = &group{}
 			}
 			monthly[m].add(ov)
-			tops = append(tops, top{e.ID, e.StrainName, o, e.Source})
+			tops = append(tops, top{e.ID, e.StrainName, e.Breeder, o, e.Source})
 		}
 		all.add(ov)
 		if g := bySource[e.Source]; g != nil {

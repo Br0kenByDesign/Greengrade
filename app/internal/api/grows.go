@@ -13,6 +13,7 @@ type growOut struct {
 	Name               string     `json:"name"`
 	StrainID           *string    `json:"strainId"`
 	StrainName         *string    `json:"strainName"`
+	Breeder            *string    `json:"breeder"`
 	Location           string     `json:"location"`
 	SeedType           string     `json:"seedType"`
 	Environment        string     `json:"environment"`
@@ -32,13 +33,13 @@ type growOut struct {
 	LastLogAt          *time.Time `json:"lastLogAt"`
 }
 
-const growCols = `g.id, g.name, g.strain_id, s.name, g.location, g.seed_type, g.environment, g.medium, g.light_watts,
+const growCols = `g.id, g.name, g.strain_id, s.name, (SELECT b.name FROM breeders b WHERE b.id=s.breeder_id), g.location, g.seed_type, g.environment, g.medium, g.light_watts,
 	to_char(g.germinated_on,'YYYY-MM-DD'), to_char(g.flowering_on,'YYYY-MM-DD'), g.expected_flower_days,
 	to_char(g.harvested_on,'YYYY-MM-DD'), g.dry_days, g.cure_weeks, g.yield_grams, g.notes, g.created_at, g.updated_at,
 	(SELECT count(*) FROM entries e WHERE e.grow_id=g.id), (SELECT max(created_at) FROM grow_logs l WHERE l.grow_id=g.id)`
 
 func scanGrow(row interface{ Scan(...any) error }, g *growOut) error {
-	return row.Scan(&g.ID, &g.Name, &g.StrainID, &g.StrainName, &g.Location, &g.SeedType, &g.Environment, &g.Medium, &g.LightWatts,
+	return row.Scan(&g.ID, &g.Name, &g.StrainID, &g.StrainName, &g.Breeder, &g.Location, &g.SeedType, &g.Environment, &g.Medium, &g.LightWatts,
 		&g.GerminatedOn, &g.FloweringOn, &g.ExpectedFlowerDays, &g.HarvestedOn, &g.DryDays, &g.CureWeeks, &g.YieldGrams,
 		&g.Notes, &g.CreatedAt, &g.UpdatedAt, &g.EntryCount, &g.LastLogAt)
 }
@@ -104,6 +105,7 @@ func (s *Server) handleGrowSave(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Name               string  `json:"name"`
 		StrainName         string  `json:"strainName"`
+		BreederName        string  `json:"breederName"`
 		Location           string  `json:"location"`
 		SeedType           string  `json:"seedType"`
 		Environment        string  `json:"environment"`
@@ -147,7 +149,7 @@ func (s *Server) handleGrowSave(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback(ctx)
 	var sid *string
 	if NormalizeName(in.StrainName) != "" {
-		id, err := ensureStrain(ctx, tx, in.StrainName)
+		id, err := ensureStrain(ctx, tx, in.StrainName, in.BreederName)
 		if err != nil {
 			writeErr(w, err)
 			return

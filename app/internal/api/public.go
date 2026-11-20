@@ -25,13 +25,14 @@ func (s *Server) handlePublicList(w http.ResponseWriter, r *http.Request) {
 		WITH agg AS (SELECT strain_id, count(*) c, avg(overall) a, min(created_at) first_at, max(updated_at) last_at
 		             FROM public_ratings GROUP BY strain_id),
 		     g AS (SELECT COALESCE(avg(overall), 7) m FROM public_ratings)
-		SELECT s.id, s.name, agg.c, round(agg.a,1)::float8, cover.photo_id,
+		SELECT s.id, s.name, b.name, agg.c, round(agg.a,1)::float8, cover.photo_id,
 		       EXISTS (SELECT 1 FROM public_ratings m WHERE m.strain_id=s.id AND m.user_id=$2)
 		FROM agg JOIN strains s ON s.id=agg.strain_id CROSS JOIN g
+		LEFT JOIN breeders b ON b.id=s.breeder_id
 		LEFT JOIN LATERAL (SELECT pr.photo_id FROM public_ratings pr
 			WHERE pr.strain_id=s.id AND pr.photo_id IS NOT NULL AND NOT pr.photo_hidden
 			ORDER BY (pr.photo_id = s.pinned_photo_id) DESC NULLS LAST, pr.updated_at DESC LIMIT 1) cover ON true
-		WHERE ($1 = '' OR s.name_norm LIKE '%' || $1 || '%')
+		WHERE ($1 = '' OR s.name_norm LIKE '%' || $1 || '%' OR b.name_norm LIKE '%' || $1 || '%')
 		  AND (NOT $3 OR EXISTS (SELECT 1 FROM public_ratings m WHERE m.strain_id=s.id AND m.user_id=$2))
 		ORDER BY `+order+` LIMIT 60 OFFSET $4`, norm, current(r).ID, q.Get("sort") == "mine", offset)
 	if err != nil {
@@ -42,15 +43,16 @@ func (s *Server) handlePublicList(w http.ResponseWriter, r *http.Request) {
 	out := []map[string]any{}
 	for rows.Next() {
 		var id, name string
+		var breeder *string
 		var c int
 		var a float64
 		var cover *string
 		var mine bool
-		if err := rows.Scan(&id, &name, &c, &a, &cover, &mine); err != nil {
+		if err := rows.Scan(&id, &name, &breeder, &c, &a, &cover, &mine); err != nil {
 			internal(w, err)
 			return
 		}
-		out = append(out, map[string]any{"id": id, "name": name, "count": c, "avg": a, "coverPhotoId": cover, "mine": mine})
+		out = append(out, map[string]any{"id": id, "name": name, "breeder": breeder, "count": c, "avg": a, "coverPhotoId": cover, "mine": mine})
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -62,14 +64,15 @@ func (s *Server) handlePublicStrain(w http.ResponseWriter, r *http.Request) {
 	}
 	u, ctx := current(r), r.Context()
 	var name string
+	var breeder *string
 	var c int
 	var a, sm, ta, lo, ef, qu *float64
 	var since *time.Time
-	err := s.db.QueryRow(ctx, `SELECT s.name, count(pr.id), round(avg(pr.overall),1)::float8,
+	err := s.db.QueryRow(ctx, `SELECT s.name, (SELECT b.name FROM breeders b WHERE b.id=s.breeder_id), count(pr.id), round(avg(pr.overall),1)::float8,
 		round(avg(pr.smell),1)::float8, round(avg(pr.taste),1)::float8, round(avg(pr.look),1)::float8,
 		round(avg(pr.effect),1)::float8, round(avg(pr.quality),1)::float8, min(pr.created_at)
 		FROM strains s LEFT JOIN public_ratings pr ON pr.strain_id=s.id WHERE s.id=$1 GROUP BY s.id`, id).
-		Scan(&name, &c, &a, &sm, &ta, &lo, &ef, &qu, &since)
+		Scan(&name, &breeder, &c, &a, &sm, &ta, &lo, &ef, &qu, &since)
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -129,7 +132,7 @@ func (s *Server) handlePublicStrain(w http.ResponseWriter, r *http.Request) {
 		sinceStr = &v
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"id": id, "name": name, "count": c, "avg": a, "since": sinceStr,
+		"id": id, "name": name, "breeder": breeder, "count": c, "avg": a, "since": sinceStr,
 		"categories": map[string]*float64{"smell": sm, "taste": ta, "look": lo, "effect": ef, "quality": qu},
 		"histogram":  hist, "comments": comments, "photos": photos, "mine": mine,
 	})

@@ -110,6 +110,7 @@ func (s *Server) Handler() http.Handler {
 
 	// private log
 	m.HandleFunc("GET /api/strains/suggest", s.auth(s.handleSuggest))
+	m.HandleFunc("GET /api/breeders/suggest", s.auth(s.handleBreederSuggest))
 	m.HandleFunc("GET /api/entries", s.auth(s.handleEntries))
 	m.HandleFunc("POST /api/entries", s.auth(s.handleEntryCreate))
 	m.HandleFunc("GET /api/entries/{id}", s.auth(s.handleEntryGet))
@@ -149,6 +150,9 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("POST /api/admin/strains/merge", s.admin(s.handleAdminMerge))
 	m.HandleFunc("GET /api/admin/strains/{id}/photos", s.admin(s.handleAdminStrainPhotos))
 	m.HandleFunc("POST /api/admin/strains/{id}/pin", s.admin(s.handleAdminPin))
+	m.HandleFunc("GET /api/admin/breeders", s.admin(s.handleAdminBreeders))
+	m.HandleFunc("PATCH /api/admin/breeders/{id}", s.admin(s.handleAdminBreederRename))
+	m.HandleFunc("POST /api/admin/breeders/merge", s.admin(s.handleAdminBreederMerge))
 
 	m.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) { fail(w, http.StatusNotFound, "Nicht gefunden.") })
 	m.HandleFunc("GET /healthz", s.handleHealth)

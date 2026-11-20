@@ -15,11 +15,12 @@ func (s *Server) handleAdminStrains(w http.ResponseWriter, r *http.Request) {
 	norm := NormalizeName(r.URL.Query().Get("q"))
 	// Only strains that are visible to others (shared ratings) or reported. Names that exist only
 	// in private logs are none of the moderation's business.
-	rows, err := s.db.Query(r.Context(), `SELECT s.id, s.name, s.pinned_photo_id, (SELECT count(*) FROM public_ratings p WHERE p.strain_id=s.id)
-		FROM strains s WHERE ($1='' OR s.name_norm LIKE '%'||$1||'%' OR similarity(s.name_norm,$1) > 0.3)
+	rows, err := s.db.Query(r.Context(), `SELECT s.id, s.name, b.name, s.pinned_photo_id, (SELECT count(*) FROM public_ratings p WHERE p.strain_id=s.id)
+		FROM strains s LEFT JOIN breeders b ON b.id=s.breeder_id
+		WHERE ($1='' OR s.name_norm LIKE '%'||$1||'%' OR similarity(s.name_norm,$1) > 0.3 OR b.name_norm LIKE '%'||$1||'%')
 		  AND (EXISTS (SELECT 1 FROM public_ratings p WHERE p.strain_id=s.id)
 		       OR EXISTS (SELECT 1 FROM reports rp WHERE rp.strain_id=s.id AND rp.status='open'))
-		ORDER BY (SELECT count(*) FROM public_ratings p WHERE p.strain_id=s.id) DESC, s.name LIMIT 100`, norm)
+		ORDER BY (SELECT count(*) FROM public_ratings p WHERE p.strain_id=s.id) DESC, s.name, b.name NULLS LAST LIMIT 100`, norm)
 	if err != nil {
 		internal(w, err)
 		return
@@ -28,10 +29,10 @@ func (s *Server) handleAdminStrains(w http.ResponseWriter, r *http.Request) {
 	out := []map[string]any{}
 	for rows.Next() {
 		var id, name string
-		var pin *string
+		var breeder, pin *string
 		var p int
-		rows.Scan(&id, &name, &pin, &p)
-		out = append(out, map[string]any{"id": id, "name": name, "pinnedPhotoId": pin, "ratings": p})
+		rows.Scan(&id, &name, &breeder, &pin, &p)
+		out = append(out, map[string]any{"id": id, "name": name, "breeder": breeder, "pinnedPhotoId": pin, "ratings": p})
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -54,7 +55,7 @@ func (s *Server) handleAdminStrainRename(w http.ResponseWriter, r *http.Request)
 	w.WriteHeader(http.StatusNoContent)
 }
 
-var errStrainExists = errBad("Diese Sorte gibt es schon. Führe die beiden zusammen.")
+var errStrainExists = errBad("Diese Sorte gibt es bei diesem Hersteller bzw. Breeder schon. Führe die beiden zusammen.")
 
 // renameStrain changes the public name of a strain and logs it.
 func (s *Server) renameStrain(ctx context.Context, id, newName, actorID, reason string) error {
@@ -68,17 +69,23 @@ func (s *Server) renameStrain(ctx context.Context, id, newName, actorID, reason 
 	}
 	return pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 		var other string
-		if err := tx.QueryRow(ctx, `SELECT id FROM strains WHERE name_norm=$1 AND id<>$2`, norm, id).Scan(&other); err == nil {
+		if err := tx.QueryRow(ctx, `SELECT o.id FROM strains o JOIN strains s ON s.id=$2
+			WHERE o.name_norm=$1 AND o.breeder_id IS NOT DISTINCT FROM s.breeder_id AND o.id<>$2`, norm, id).Scan(&other); err == nil {
 			return errStrainExists
 		}
 		var old string
-		if err := tx.QueryRow(ctx, `SELECT name FROM strains WHERE id=$1`, id).Scan(&old); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT strain_label($1)`, id).Scan(&old); err != nil {
 			return err
+		}
+		if old == "" {
+			return pgx.ErrNoRows
 		}
 		if _, err := tx.Exec(ctx, `UPDATE strains SET name=$2, name_norm=$3 WHERE id=$1`, id, name, norm); err != nil {
 			return err
 		}
-		return logAction(ctx, tx, modAction{Action: "rename_strain", Reason: reason, StrainName: name, Content: &old, ActorID: actorID})
+		var label string
+		tx.QueryRow(ctx, `SELECT strain_label($1)`, id).Scan(&label)
+		return logAction(ctx, tx, modAction{Action: "rename_strain", Reason: reason, StrainName: label, Content: &old, ActorID: actorID})
 	})
 }
 
@@ -104,34 +111,40 @@ func (s *Server) handleAdminMerge(w http.ResponseWriter, r *http.Request) {
 			return pgx.ErrNoRows
 		}
 		var from, into string
-		tx.QueryRow(ctx, `SELECT (SELECT name FROM strains WHERE id=$1), (SELECT name FROM strains WHERE id=$2)`, in.FromID, in.IntoID).Scan(&from, &into)
+		tx.QueryRow(ctx, `SELECT strain_label($1), strain_label($2)`, in.FromID, in.IntoID).Scan(&from, &into)
 		if err := logAction(ctx, tx, modAction{Action: "merge_strain", StrainName: into, Content: &from, ActorID: current(r).ID}); err != nil {
 			return err
 		}
-		// a user with ratings on both keeps the newer one
-		if _, err := tx.Exec(ctx, `DELETE FROM public_ratings a USING public_ratings b
-			WHERE a.user_id=b.user_id AND a.strain_id IN ($1,$2) AND b.strain_id IN ($1,$2) AND a.id<>b.id
-			AND (a.updated_at, a.id) < (b.updated_at, b.id)`, in.FromID, in.IntoID); err != nil {
-			return err
-		}
-		for _, q := range []string{
-			`UPDATE public_ratings SET strain_id=$2 WHERE strain_id=$1`,
-			`UPDATE entries SET strain_id=$2 WHERE strain_id=$1`,
-			`UPDATE grows SET strain_id=$2 WHERE strain_id=$1`,
-			`UPDATE strains SET pinned_photo_id = COALESCE(pinned_photo_id, (SELECT pinned_photo_id FROM strains WHERE id=$1)) WHERE id=$2`,
-			`DELETE FROM strains WHERE id=$1`,
-		} {
-			if _, err := tx.Exec(ctx, q, in.FromID, in.IntoID); err != nil {
-				return err
-			}
-		}
-		return nil
+		return mergeStrains(ctx, tx, in.FromID, in.IntoID)
 	})
 	if err != nil {
 		writeErr(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// mergeStrains moves everything from one strain into another and deletes the first one.
+func mergeStrains(ctx context.Context, tx pgx.Tx, from, into string) error {
+	// a user with ratings on both keeps the newer one
+	if _, err := tx.Exec(ctx, `DELETE FROM public_ratings a USING public_ratings b
+		WHERE a.user_id=b.user_id AND a.strain_id IN ($1,$2) AND b.strain_id IN ($1,$2) AND a.id<>b.id
+		AND (a.updated_at, a.id) < (b.updated_at, b.id)`, from, into); err != nil {
+		return err
+	}
+	for _, q := range []string{
+		`UPDATE public_ratings SET strain_id=$2 WHERE strain_id=$1`,
+		`UPDATE entries SET strain_id=$2 WHERE strain_id=$1`,
+		`UPDATE grows SET strain_id=$2 WHERE strain_id=$1`,
+		`UPDATE reports SET strain_id=$2 WHERE strain_id=$1`,
+		`UPDATE strains SET pinned_photo_id = COALESCE(pinned_photo_id, (SELECT pinned_photo_id FROM strains WHERE id=$1)) WHERE id=$2`,
+	} {
+		if _, err := tx.Exec(ctx, q, from, into); err != nil {
+			return err
+		}
+	}
+	_, err := tx.Exec(ctx, `DELETE FROM strains WHERE id=$1`, from)
+	return err
 }
 
 func (s *Server) handleAdminStrainPhotos(w http.ResponseWriter, r *http.Request) {

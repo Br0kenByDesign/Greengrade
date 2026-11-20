@@ -74,6 +74,13 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 			tx.Rollback(ctx)
 			return fmt.Errorf("migration %s: %w", name, err)
 		}
+		// Data steps that need Go (e.g. the same name normalisation as the app) run in the same transaction.
+		if step := goSteps[v]; step != nil {
+			if err := step(ctx, tx); err != nil {
+				tx.Rollback(ctx)
+				return fmt.Errorf("migration %s: %w", name, err)
+			}
+		}
 		if _, err := tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES ($1)`, v); err != nil {
 			tx.Rollback(ctx)
 			return err

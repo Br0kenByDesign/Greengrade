@@ -10,9 +10,9 @@ import (
 	"net/http"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/Br0kenByDesign/Greengrade/internal/media"
+	"github.com/Br0kenByDesign/Greengrade/internal/names"
 	"github.com/Br0kenByDesign/Greengrade/internal/security"
 	"github.com/jackc/pgx/v5"
 )
@@ -25,28 +25,30 @@ type queryer interface {
 // ---------- strain names ----------
 
 // NormalizeName makes "Gorilla Glue #4", "gorilla-glue 4" and "GORILLA GLUE 4" the same strain.
-func NormalizeName(s string) string {
-	var b strings.Builder
-	space := false
-	for _, r := range strings.ToLower(s) {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			if space && b.Len() > 0 {
-				b.WriteByte(' ')
-			}
-			b.WriteRune(r)
-			space = false
-		} else {
-			space = true
-		}
-	}
-	return b.String()
-}
+func NormalizeName(s string) string { return names.Strain(s) }
 
 func displayName(s string) string {
 	return strings.Join(strings.Fields(security.CleanText(s, 80)), " ")
 }
 
-func ensureStrain(ctx context.Context, tx pgx.Tx, name string) (string, error) {
+// ensureBreeder returns the breeder for a manufacturer or breeder name, nil for an empty name.
+func ensureBreeder(ctx context.Context, tx pgx.Tx, name string) (*string, error) {
+	name = displayName(name)
+	norm := names.Breeder(name)
+	if norm == "" {
+		return nil, nil
+	}
+	if err := security.CheckBreederName(name); err != nil {
+		return nil, errBad(err.Error())
+	}
+	var id string
+	err := tx.QueryRow(ctx, `INSERT INTO breeders(name, name_norm) VALUES ($1,$2)
+		ON CONFLICT (name_norm) DO UPDATE SET name_norm=EXCLUDED.name_norm RETURNING id`, name, norm).Scan(&id)
+	return &id, err
+}
+
+// ensureStrain returns the strain for name + breeder. The same name with another breeder is another strain.
+func ensureStrain(ctx context.Context, tx pgx.Tx, name, breeder string) (string, error) {
 	name = displayName(name)
 	norm := NormalizeName(name)
 	if norm == "" {
@@ -55,10 +57,34 @@ func ensureStrain(ctx context.Context, tx pgx.Tx, name string) (string, error) {
 	if err := security.CheckStrainName(name); err != nil {
 		return "", errBad(err.Error())
 	}
+	bid, err := ensureBreeder(ctx, tx, breeder)
+	if err != nil {
+		return "", err
+	}
 	var id string
-	err := tx.QueryRow(ctx, `INSERT INTO strains(name, name_norm) VALUES ($1,$2)
-		ON CONFLICT (name_norm) DO UPDATE SET name_norm=EXCLUDED.name_norm RETURNING id`, name, norm).Scan(&id)
+	err = tx.QueryRow(ctx, `INSERT INTO strains(name, name_norm, breeder_id) VALUES ($1,$2,$3)
+		ON CONFLICT (name_norm, breeder_id) DO UPDATE SET name_norm=EXCLUDED.name_norm RETURNING id`, name, norm, bid).Scan(&id)
 	return id, err
+}
+
+// shareReady checks that a shared entry names its breeder: required for pharmacy products,
+// for own grows "Breeder unbekannt" can be chosen explicitly.
+func shareReady(ctx context.Context, tx pgx.Tx, entryID string) error {
+	var source string
+	var hasBreeder, unknown bool
+	if err := tx.QueryRow(ctx, `SELECT e.source, st.breeder_id IS NOT NULL, COALESCE(e.details->>'breederUnknown','') = 'true'
+		FROM entries e JOIN strains st ON st.id=e.strain_id WHERE e.id=$1`, entryID).Scan(&source, &hasBreeder, &unknown); err != nil {
+		return err
+	}
+	switch {
+	case hasBreeder:
+		return nil
+	case source == "pharmacy":
+		return errBad("Zum Teilen brauchen wir den Hersteller. Er steht auf dem Etikett.")
+	case !unknown:
+		return errBad("Zum Teilen brauchen wir den Breeder. Kennst du ihn nicht, wähle \"Breeder unbekannt\".")
+	}
+	return nil
 }
 
 func (s *Server) handleSuggest(w http.ResponseWriter, r *http.Request) {
@@ -68,15 +94,23 @@ func (s *Server) handleSuggest(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, out)
 		return
 	}
+	// Only strains that are public or in the own log. The thumbnail is a visible public photo or an own one.
 	rows, err := s.db.Query(r.Context(), `
-		SELECT s.id, s.name, COALESCE(p.c,0), p.a,
-		       EXISTS (SELECT 1 FROM entries e WHERE e.strain_id=s.id AND e.user_id=$2) AS mine
+		SELECT s.id, s.name, b.name, COALESCE(p.c,0), p.a,
+		       EXISTS (SELECT 1 FROM entries e WHERE e.strain_id=s.id AND e.user_id=$2) AS mine,
+		       COALESCE(cover.photo_id, own.id)
 		FROM strains s
+		LEFT JOIN breeders b ON b.id=s.breeder_id
 		LEFT JOIN (SELECT strain_id, count(*) c, round(avg(overall),1)::float8 a FROM public_ratings GROUP BY strain_id) p ON p.strain_id=s.id
+		LEFT JOIN LATERAL (SELECT pr.photo_id FROM public_ratings pr
+			WHERE pr.strain_id=s.id AND pr.photo_id IS NOT NULL AND NOT pr.photo_hidden
+			ORDER BY (pr.photo_id = s.pinned_photo_id) DESC NULLS LAST, pr.updated_at DESC LIMIT 1) cover ON true
+		LEFT JOIN LATERAL (SELECT ph.id FROM photos ph JOIN entries e ON e.id=ph.entry_id
+			WHERE e.strain_id=s.id AND e.user_id=$2 ORDER BY ph.created_at DESC LIMIT 1) own ON true
 		WHERE (p.c > 0 OR EXISTS (SELECT 1 FROM entries e WHERE e.strain_id=s.id AND e.user_id=$2)
 		                OR EXISTS (SELECT 1 FROM grows g WHERE g.strain_id=s.id AND g.user_id=$2))
-		  AND (s.name_norm LIKE '%' || $1 || '%' OR similarity(s.name_norm, $1) > 0.3)
-		ORDER BY (s.name_norm LIKE $1 || '%') DESC, similarity(s.name_norm, $1) DESC, p.c DESC NULLS LAST
+		  AND (s.name_norm LIKE '%' || $1 || '%' OR similarity(s.name_norm, $1) > 0.3 OR b.name_norm LIKE $1 || '%')
+		ORDER BY (s.name_norm LIKE $1 || '%') DESC, similarity(s.name_norm, $1) DESC, p.c DESC NULLS LAST, b.name NULLS LAST
 		LIMIT 8`, q, current(r).ID)
 	if err != nil {
 		internal(w, err)
@@ -85,14 +119,48 @@ func (s *Server) handleSuggest(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 	for rows.Next() {
 		var id, name string
+		var breeder, photo *string
 		var c int
 		var a *float64
 		var mine bool
-		if err := rows.Scan(&id, &name, &c, &a, &mine); err != nil {
+		if err := rows.Scan(&id, &name, &breeder, &c, &a, &mine, &photo); err != nil {
 			internal(w, err)
 			return
 		}
-		out = append(out, map[string]any{"id": id, "name": name, "count": c, "avg": a, "mine": mine})
+		out = append(out, map[string]any{"id": id, "name": name, "breeder": breeder, "count": c, "avg": a, "mine": mine, "photoId": photo})
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// handleBreederSuggest offers manufacturers and breeders that are public or in the own log.
+func (s *Server) handleBreederSuggest(w http.ResponseWriter, r *http.Request) {
+	q := names.Breeder(r.URL.Query().Get("q"))
+	out := []map[string]any{}
+	if len([]rune(q)) < 1 {
+		writeJSON(w, http.StatusOK, out)
+		return
+	}
+	rows, err := s.db.Query(r.Context(), `
+		SELECT b.name FROM breeders b
+		WHERE EXISTS (SELECT 1 FROM strains s WHERE s.breeder_id=b.id AND (
+		        EXISTS (SELECT 1 FROM public_ratings p WHERE p.strain_id=s.id)
+		        OR EXISTS (SELECT 1 FROM entries e WHERE e.strain_id=s.id AND e.user_id=$2)
+		        OR EXISTS (SELECT 1 FROM grows g WHERE g.strain_id=s.id AND g.user_id=$2)))
+		  AND (b.name_norm LIKE '%' || $1 || '%' OR similarity(b.name_norm, $1) > 0.3)
+		ORDER BY (b.name_norm LIKE $1 || '%') DESC, similarity(b.name_norm, $1) DESC, b.name
+		LIMIT 8`, q, current(r).ID)
+	if err != nil {
+		internal(w, err)
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			internal(w, err)
+			return
+		}
+		out = append(out, map[string]any{"name": name})
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -241,15 +309,16 @@ func overall(a, b, c, d, e int) float64 {
 }
 
 type entryIn struct {
-	StrainName string         `json:"strainName"`
-	GrowID     *string        `json:"growId"`
-	Source     string         `json:"source"`
-	Form       string         `json:"form"`
-	Genetics   int            `json:"genetics"`
-	Details    map[string]any `json:"details"`
-	Notes      string         `json:"notes"`
-	Rebuy      bool           `json:"rebuy"`
-	Tasting    *tastingIn     `json:"tasting"`
+	StrainName  string         `json:"strainName"`
+	BreederName string         `json:"breederName"`
+	GrowID      *string        `json:"growId"`
+	Source      string         `json:"source"`
+	Form        string         `json:"form"`
+	Genetics    int            `json:"genetics"`
+	Details     map[string]any `json:"details"`
+	Notes       string         `json:"notes"`
+	Rebuy       bool           `json:"rebuy"`
+	Tasting     *tastingIn     `json:"tasting"`
 }
 
 func (e *entryIn) validate() error {
@@ -275,6 +344,7 @@ type entrySummary struct {
 	ID           string         `json:"id"`
 	StrainID     string         `json:"strainId"`
 	StrainName   string         `json:"strainName"`
+	Breeder      *string        `json:"breeder"`
 	GrowID       *string        `json:"growId"`
 	Source       string         `json:"source"`
 	Form         string         `json:"form"`
@@ -322,12 +392,12 @@ func scanTasting(row interface{ Scan(...any) error }, t *tastingOut) error {
 }
 
 func (s *Server) listEntries(ctx context.Context, uid string, onlyID string) ([]entrySummary, error) {
-	q := `SELECT e.id, e.strain_id, st.name, e.grow_id, e.source, e.form, e.genetics, e.details, e.rebuy, e.created_at, e.updated_at,
+	q := `SELECT e.id, e.strain_id, st.name, br.name, e.grow_id, e.source, e.form, e.genetics, e.details, e.rebuy, e.created_at, e.updated_at,
 		(SELECT count(*) FROM tastings x WHERE x.entry_id=e.id),
 		(SELECT p.id FROM photos p WHERE p.entry_id=e.id ORDER BY p.created_at LIMIT 1),
 		EXISTS (SELECT 1 FROM public_ratings pr WHERE pr.entry_id=e.id),
 		lt.id IS NOT NULL, ` + strings.ReplaceAll(tastingCols, "t.", "lt.") + `
-		FROM entries e JOIN strains st ON st.id=e.strain_id
+		FROM entries e JOIN strains st ON st.id=e.strain_id LEFT JOIN breeders br ON br.id=st.breeder_id
 		LEFT JOIN LATERAL (SELECT * FROM tastings t WHERE t.entry_id=e.id ORDER BY t.tasted_on DESC, t.created_at DESC LIMIT 1) lt ON true
 		WHERE e.user_id=$1 AND ($2 = '' OR e.id::text = $2)
 		ORDER BY COALESCE(lt.tasted_on, e.created_at::date) DESC, e.updated_at DESC`
@@ -345,7 +415,7 @@ func (s *Server) listEntries(ctx context.Context, uid string, onlyID string) ([]
 		var tsm, tta, tlo, tef, tqu *int
 		var tcreated *time.Time
 		var tarom, tflav, teff, tside, tday []string
-		if err := rows.Scan(&e.ID, &e.StrainID, &e.StrainName, &e.GrowID, &e.Source, &e.Form, &e.Genetics, &e.Details, &e.Rebuy,
+		if err := rows.Scan(&e.ID, &e.StrainID, &e.StrainName, &e.Breeder, &e.GrowID, &e.Source, &e.Form, &e.Genetics, &e.Details, &e.Rebuy,
 			&e.CreatedAt, &e.UpdatedAt, &e.TastingCount, &e.CoverPhoto, &e.Shared, &has,
 			&tid, &tdate, &tmethod, &t.Temperature, &t.OnsetMin, &t.DurationH, &tsm, &tta, &tlo, &tef, &tqu,
 			&tarom, &tflav, &teff, &tside, &tday, &tnote, &tcreated); err != nil {
@@ -512,7 +582,7 @@ func (s *Server) handleEntryCreate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	sid, err := ensureStrain(ctx, tx, in.StrainName)
+	sid, err := ensureStrain(ctx, tx, in.StrainName, in.BreederName)
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -564,7 +634,7 @@ func (s *Server) handleEntryUpdate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	sid, err := ensureStrain(ctx, tx, in.StrainName)
+	sid, err := ensureStrain(ctx, tx, in.StrainName, in.BreederName)
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -593,6 +663,17 @@ func (s *Server) handleEntryUpdate(w http.ResponseWriter, r *http.Request) {
 		}
 		if err != nil {
 			internal(w, err)
+			return
+		}
+	}
+	var shared bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM public_ratings WHERE entry_id=$1)`, id).Scan(&shared); err != nil {
+		internal(w, err)
+		return
+	}
+	if shared {
+		if err := shareReady(ctx, tx, id); err != nil {
+			writeErr(w, errBad("Diese Bewertung ist öffentlich geteilt. "+err.Error()))
 			return
 		}
 	}
@@ -912,6 +993,10 @@ func (s *Server) handleShare(w http.ResponseWriter, r *http.Request) {
 		var fp []byte
 		if comment != nil {
 			fp = s.commentFP(*comment)
+		}
+		if err := shareReady(ctx, tx, id); err != nil {
+			writeErr(w, err)
+			return
 		}
 		var sm, ta, lo, ef, qu int
 		err := tx.QueryRow(ctx, `SELECT smell, taste, look, effect, quality FROM tastings WHERE entry_id=$1 ORDER BY tasted_on DESC, created_at DESC LIMIT 1`, id).
