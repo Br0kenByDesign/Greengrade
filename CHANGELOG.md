@@ -2,6 +2,34 @@
 
 Alle nennenswerten Änderungen an greengrade. Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), die Versionen an [Semantic Versioning](https://semver.org/lang/de/).
 
+## [1.5.0] - 2026-11-20
+
+### Neu
+- **Sorte + Hersteller bzw. Breeder als Einheit:** Dieselbe Sorte von zwei Herstellern oder Breedern sind jetzt zwei getrennte Sorten mit eigener Sortenseite, eigenem Schnitt, eigenen Kommentaren und eigenem Titelbild. So lässt sich zum Beispiel "Lemon Sorbet" von zwei Apothekenherstellern direkt vergleichen.
+- **Ein gemeinsames Feld** direkt unter dem Sortennamen: "Hersteller" bei Apotheke, "Breeder" beim eigenen Grow, mit Autovervollständigung. Schreibvarianten werden zusammengeführt: "Bathera", "bathera" und "Bathera GmbH" sind derselbe Hersteller, "Barney's Farm" und "Barneys Farm" derselbe Breeder. Auch Grows haben das Feld.
+- **Vorschläge mit Vorschaubild:** Beim Tippen erscheinen Sorte, darunter Hersteller bzw. Breeder, ein kleines Foto (öffentliches Titelbild oder eigenes Foto) sowie Schnitt und Anzahl der Bewertungen. Ein Klick übernimmt Sorte und Hersteller.
+- **Pflichtangabe beim Teilen:** Öffentlich teilen geht nur mit Hersteller (Apotheke) bzw. Breeder (eigener Grow). Beim Grow kann ausdrücklich "Breeder unbekannt" gewählt werden, zum Beispiel bei Samen aus einer Blüte. Private Einträge brauchen die Angabe nicht.
+- **Moderation:** Neuer Bereich "Hersteller / Breeder" zum Umbenennen und Zusammenführen (gilt für alle Sorten des Herstellers; gleichnamige Sorten werden dabei zusammengelegt). Gemeldete Namen lassen sich direkt in der Meldung korrigieren, Sortenname und Hersteller getrennt.
+
+### Geändert
+- Hersteller bzw. Breeder erscheinen in der Übersicht, im Eintrag, auf der öffentlichen Liste und Sortenseite, im Vergleich (eigene Zeile), in der Bestenliste, im Grow und im Datenexport. Die öffentliche Suche findet auch Hersteller.
+- Ändert man den Hersteller eines geteilten Eintrags, wandert die öffentliche Bewertung mit zur passenden Sorte. Entfernen lässt er sich nur, solange der Eintrag nicht geteilt ist.
+- Meldungen, Benachrichtigungen und das Moderationsprotokoll nennen die Sorte mit Hersteller ("Lemon Sorbet · Bathera").
+- Landingpage, Datenschutzerklärung und Nutzungsbedingungen nennen den Hersteller bzw. Breeder als öffentliche Angabe beim Teilen (Stand 20. November 2026).
+
+### Migration
+- Läuft beim Start automatisch (004). Die bisherigen Freitexte "Hersteller" und "Breeder" werden übernommen und zusammengeführt. Wurde eine Sorte bisher mit verschiedenen Herstellern bewertet, wird sie aufgeteilt; die Sorte mit den meisten öffentlichen Bewertungen behält ihre Adresse. Bewertungen, Meldungen, Grows und Titelbilder wandern mit. Einträge ohne Angabe landen bei "ohne Angabe".
+- Freitexte, die keine gültigen öffentlichen Namen sind (z. B. mit Link), bleiben privat im Eintrag als "Hersteller (Notiz)" stehen.
+
+### Behoben
+- Sorten zusammenführen in der Moderation schlug mit einem internen Fehler fehl.
+
+## [1.4.1] - 2026-11-19
+
+### Sicherheit
+- **Landing-Container auf nginx 1.30 (stable):** Basis-Image von `nginx-unprivileged:1.29-alpine` auf `1.30-alpine` angehoben. Die 1.29-Reihe bekommt keine Updates mehr; ab 1.30.7 sind die "NGINX2Root"-Lücken (u. a. CVE-2026-123007, CVE-2026-123633) behoben. greengrade war nach unserer Einschätzung nicht ausnutzbar: Der Container spricht nur HTTP/1.1 hinter dem Reverse Proxy und nutzt weder HTTP/2 noch HTTP/3, `resolver`/`mirror` oder den Mail-Proxy. App und Statusseite laufen ohne nginx.
+- **Hinweis für Betreiber:** Exponiert ist vor allem der Reverse Proxy vor greengrade (z. B. Nginx Proxy Manager, der auf OpenResty basiert). Dort bis zu einem gepatchten Update HTTP/2 abschalten und danach aktualisieren.
+
 ## [1.4.0] - 2026-10-09
 
 ### Neu
@@ -111,6 +139,8 @@ Erste Version.
 - Datenexport und sofortiges Löschen des Kontos
 - Statische Landingpage, drei gehärtete Container mit Docker Compose
 
+[1.5.0]: https://github.com/Br0kenByDesign/Greengrade/releases/tag/v1.5.0
+[1.4.1]: https://github.com/Br0kenByDesign/Greengrade/releases/tag/v1.4.1
 [1.4.0]: https://github.com/Br0kenByDesign/Greengrade/releases/tag/v1.4.0
 [1.3.0]: https://github.com/Br0kenByDesign/Greengrade/releases/tag/v1.3.0
 [1.2.0]: https://github.com/Br0kenByDesign/Greengrade/releases/tag/v1.2.0
