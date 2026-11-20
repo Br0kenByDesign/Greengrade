@@ -12,13 +12,14 @@
   import Seg from '../components/Seg.svelte';
   import Switch from '../components/Switch.svelte';
   import StrainInput from '../components/StrainInput.svelte';
+  import BreederInput from '../components/BreederInput.svelte';
 
   let { params } = $props();
   const editId = params.id || null;
   const DRAFT = DRAFT_KEY;
 
   const blankTasting = () => ({ tastedOn: today(), method: 'Vaporizer', temperature: '', onsetMin: '', durationH: '', smell: 0, taste: 0, look: 0, effect: 0, quality: 0, aromas: [], flavors: [], effects: [], sideEffects: [], daytime: [], note: '' });
-  let f = $state({ strainName: '', source: 'pharmacy', form: 'flower', genetics: 50, growId: '', notes: '', rebuy: false, details: { terpenes: [] } });
+  let f = $state({ strainName: '', breederName: '', source: 'pharmacy', form: 'flower', genetics: 50, growId: '', notes: '', rebuy: false, details: { terpenes: [] } });
   let t = $state(blankTasting());
   let share = $state({ enabled: false, comment: '', photo: null });
   let existing = $state([]), pending = $state([]), grows = $state([]);
@@ -28,7 +29,7 @@
   if (editId) {
     api('/api/entries/' + editId).then(e => {
       const en = e.entry;
-      f = { strainName: en.strainName, source: en.source, form: en.form, genetics: en.genetics, growId: en.growId || '', notes: e.notes, rebuy: en.rebuy, details: { terpenes: [], ...en.details } };
+      f = { strainName: en.strainName, breederName: en.breeder || '', source: en.source, form: en.form, genetics: en.genetics, growId: en.growId || '', notes: e.notes, rebuy: en.rebuy, details: { terpenes: [], ...en.details } };
       if (en.latest) t = { ...blankTasting(), ...Object.fromEntries(Object.entries(en.latest).map(([k, v]) => [k, v ?? ''])) };
       existing = e.photos;
       share = { enabled: !!e.share, comment: e.share?.comment || '', photo: e.share?.photoId ? { id: e.share.photoId } : null };
@@ -38,12 +39,17 @@
     try { const d = JSON.parse(localStorage.getItem(DRAFT)); if (d?.f) draft = d; } catch {}
     const gid = route.query.get('grow');
     if (gid) api('/api/grows/' + gid).then(({ grow: g }) => {
-      f.source = 'grow'; f.growId = g.id; f.strainName = g.strainName || g.name;
+      f.source = 'grow'; f.growId = g.id; f.strainName = g.strainName || g.name; f.breederName = g.breeder || '';
       Object.assign(f.details, { seedType: g.seedType, environment: g.environment, medium: g.medium, germinatedOn: g.germinatedOn || '', harvestedOn: g.harvestedOn || '',
         flowerDays: g.expectedFlowerDays ?? '', dryDays: g.dryDays ?? '', cureWeeks: g.cureWeeks ?? '', lightWatts: g.lightWatts ?? '', yieldGrams: g.yieldGrams ?? '' });
     }).catch(() => {});
   }
 
+  // Hersteller (pharmacy) and Breeder (own grow) are one field: together with the name it identifies the strain.
+  const bLabel = $derived(f.source === 'pharmacy' ? 'Hersteller' : 'Breeder');
+  const bUnknown = $derived(f.source === 'grow' && !!f.details.breederUnknown);
+  $effect(() => { if (bUnknown && f.breederName) f.breederName = ''; });
+  $effect(() => { if (f.source === 'pharmacy' && f.details.breederUnknown) delete f.details.breederUnknown; });
   const unit = $derived(f.form === 'extract' ? 'mg/ml' : '%');
   const total = $derived([t.smell, t.taste, t.look, t.effect, t.quality].every(Boolean) ? Math.round((t.smell + t.taste + t.look + t.effect + t.quality) / 5 * 10) / 10 : null);
   const steps = [['s1', 'Grunddaten'], ['s2', 'Herkunft'], ['s3', 'Sensorik'], ['s4', 'Wirkung'], ['s5', 'Teilen']];
@@ -87,6 +93,10 @@
     e.preventDefault();
     err = '';
     if (!f.strainName.trim()) { err = 'Bitte gib den Namen der Sorte ein.'; return; }
+    if (share.enabled && !session.me?.shareBanned && !f.breederName.trim() && !bUnknown) {
+      err = f.source === 'pharmacy' ? 'Zum Teilen brauchen wir den Hersteller. Er steht auf dem Etikett.' : 'Zum Teilen brauchen wir den Breeder. Kennst du ihn nicht, wähle "Breeder unbekannt".';
+      document.getElementById('s1').scrollIntoView({ behavior: 'smooth' }); document.getElementById('brd')?.focus(); return;
+    }
     if (!total) { err = 'Bitte vergib in allen fünf Kategorien eine Note (Geruch, Geschmack, Aussehen, Wirkung, Qualität).'; document.getElementById('s3').scrollIntoView({ behavior: 'smooth' }); return; }
     busy = true;
     try {
@@ -134,8 +144,13 @@
       <legend>Grunddaten</legend>
       <p class="lead">Was hast du vor dir? Fotos kannst du auch später noch ergänzen.</p>
       <div class="fgrid">
-        <div class="field full"><label for="strain">Sorte</label><StrainInput bind:value={f.strainName} /></div>
+        <div class="field full"><label for="strain">Sorte</label><StrainInput bind:value={f.strainName} bind:breeder={f.breederName} onpick={s => { if (s.breeder) delete f.details.breederUnknown; }} /></div>
         <div class="full"><span class="flabel">Woher kommt sie?</span><Seg label="Herkunft" bind:value={f.source} options={[['grow', 'Eigener Grow', 'Selbst angebaut'], ['pharmacy', 'Apotheke', 'Rezept']]} /></div>
+        <div class="field full"><label for="brd">{bLabel} <span class="muted" style="font-weight:400">{share.enabled ? '(zum Teilen nötig)' : '(optional)'}</span></label>
+          <BreederInput id="brd" bind:value={f.breederName} disabled={bUnknown} placeholder={bUnknown ? 'Breeder unbekannt' : f.source === 'pharmacy' ? 'z. B. Bathera, steht auf dem Etikett' : 'z. B. Barney\'s Farm'} />
+          {#if f.source === 'grow'}<label class="check-in"><input type="checkbox" bind:checked={f.details.breederUnknown}><span>Breeder unbekannt, z. B. Samen aus einer Blüte oder eigene Kreuzung</span></label>{/if}
+          <div class="hint">Sorte und {bLabel} gehören zusammen: dieselbe Sorte von einem anderen {bLabel} wird getrennt bewertet. Beim Teilen ist der {bLabel} öffentlich sichtbar.</div>
+        </div>
         <div class="full"><span class="flabel">Form</span><Seg label="Form" bind:value={f.form} options={[['flower', 'Blüten'], ['extract', 'Extrakt']]} /></div>
         <div class="full spectrum"><label class="flabel" for="gen">Genetik</label>
           <input id="gen" type="range" min="0" max="100" step="5" bind:value={f.genetics}>
@@ -159,7 +174,6 @@
       {#if f.source === 'pharmacy'}
         <p class="lead">Die Angaben stehen auf dem Etikett oder im Analysezertifikat. Sie bleiben immer privat.</p>
         <div class="fgrid">
-          <div class="field"><label for="d1">Hersteller</label><input id="d1" bind:value={f.details.manufacturer} maxlength="120"></div>
           <div class="field"><label for="d2">Produktname</label><input id="d2" bind:value={f.details.product} maxlength="120"></div>
           <div class="field"><label for="d3">THC</label><div class="unit"><input id="d3" inputmode="decimal" bind:value={f.details.thc}><span>{unit}</span></div></div>
           <div class="field"><label for="d4">CBD</label><div class="unit"><input id="d4" inputmode="decimal" bind:value={f.details.cbd}><span>{unit}</span></div></div>
@@ -178,7 +192,6 @@
             </div>
           {/if}
           <div class="field"><label for="g1">Saatgut</label><select id="g1" bind:value={f.details.seedType}><option value=""></option>{#each O.SEEDS as o}<option>{o}</option>{/each}</select></div>
-          <div class="field"><label for="g2">Breeder</label><input id="g2" bind:value={f.details.breeder} maxlength="80"></div>
           <div class="field"><label for="g3">Umgebung</label><select id="g3" bind:value={f.details.environment}><option value=""></option>{#each O.ENVIRONMENTS as o}<option>{o}</option>{/each}</select></div>
           <div class="field"><label for="g4">Medium</label><select id="g4" bind:value={f.details.medium}><option value=""></option>{#each O.MEDIA as o}<option>{o}</option>{/each}</select></div>
         </div>
@@ -267,7 +280,7 @@
         </div>
         {#if share.enabled}
           <div class="share-body">
-            <div class="note"><Icon name="info" size={20} /><span>Öffentlich sichtbar sind nur deine Gesamtnote, die fünf Teilnoten und - wenn du willst - ein Kommentar und ein Foto. Wer du bist, woher die Sorte kommt und wie du sie konsumiert hast, bleibt privat.</span></div>
+            <div class="note"><Icon name="info" size={20} /><span>Öffentlich sichtbar sind die Sorte mit {bUnknown ? 'dem Hinweis "Breeder unbekannt"' : `ihrem ${bLabel}`}, deine Gesamtnote, die fünf Teilnoten und - wenn du willst - ein Kommentar und ein Foto. Wer du bist, wo du sie bekommen hast und wie du sie konsumiert hast, bleibt privat.</span></div>
             <div class="field">
               <label for="pubc">Öffentlicher Kommentar <span class="muted" style="font-weight:400">(optional)</span></label>
               <textarea id="pubc" maxlength="500" bind:value={share.comment}></textarea>

@@ -16,7 +16,7 @@
 {#if target}
   <div class="scrim" role="presentation" onclick={e => e.target === e.currentTarget && (target = null)}>
     <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="rep-h">
-      <h2 id="rep-h">{{ photo: 'Foto melden', name: 'Sortennamen melden', comment: 'Kommentar melden' }[target.target]}</h2>
+      <h2 id="rep-h">{{ photo: 'Foto melden', name: 'Sorten- oder Herstellernamen melden', comment: 'Kommentar melden' }[target.target]}</h2>
       <p class="muted" style="font-size:14px">Was stimmt damit nicht? Wir prüfen jede Meldung. Wer gemeldet hat, erfährt niemand.</p>
       <div>{#each REPORT_REASONS as [v, l]}<label class="radio"><input type="radio" bind:group={reason} value={v}>{l}</label>{/each}</div>
       <div class="field"><label for="rep-t">Details <span class="muted" style="font-weight:400">(optional)</span></label><textarea id="rep-t" style="min-height:80px" maxlength="500" bind:value={details}></textarea></div>

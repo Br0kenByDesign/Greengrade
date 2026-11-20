@@ -16,7 +16,7 @@
 </script>
 
 <div class="head"><div><h1>Öffentliche Bewertungen</h1><p class="muted">Erfahrungen der Community, anonym zusammengefasst. Hier stehen nur Noten und Kommentare - keine Namen.</p></div></div>
-<div class="toolbar"><label class="search"><Icon name="search" size={16} /><input placeholder="Sorte suchen" aria-label="Sorte suchen" bind:value={q} oninput={onSearch}></label></div>
+<div class="toolbar"><label class="search"><Icon name="search" size={16} /><input placeholder="Sorte oder Breeder suchen" aria-label="Sorte oder Breeder suchen" bind:value={q} oninput={onSearch}></label></div>
 <div class="chips" style="margin-bottom:20px">{#each sorts as [v, l]}<button class="chip" class:on={sort === v} onclick={() => { sort = v; load(); }}>{l}</button>{/each}</div>
 {#if err}<p class="err">{err}</p>{/if}
 {#if !list}{#if !err}<div class="spinner"></div>{/if}
@@ -27,7 +27,7 @@
     {#each list as s (s.id)}
       <a class="card" href="/public/{s.id}" style="text-decoration:none;color:inherit">
         <div class="ph"><StrainImage name={s.name} photoId={s.coverPhotoId} /><span class="tag">{s.coverPhotoId ? 'Community-Foto' : 'Illustration'}</span>{#if s.mine}<span class="shared" title="Von dir bewertet"><Icon name="user" size={15} /></span>{/if}</div>
-        <div class="meta"><div><h3>{s.name}</h3><small>{s.count} Bewertung{s.count === 1 ? '' : 'en'}</small></div><span class="score">Ø {score(s.avg)}</span></div>
+        <div class="meta"><div><h3>{s.name}</h3><small>{s.breeder || 'ohne Angabe'} · {s.count} Bewertung{s.count === 1 ? '' : 'en'}</small></div><span class="score">Ø {score(s.avg)}</span></div>
       </a>
     {/each}
   </div>

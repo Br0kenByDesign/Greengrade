@@ -19,7 +19,7 @@
 
   const shown = $derived((entries || []).filter(e =>
     (filter === 'all' || e.source === filter || e.form === filter || (filter === 'shared' && e.shared) || (filter === 'rebuy' && e.rebuy)) &&
-    (!q || [e.strainName, ...(e.latest?.aromas || []), ...(e.details?.terpenes || [])].join(' ').toLowerCase().includes(q.toLowerCase()))));
+    (!q || [e.strainName, e.breeder || '', ...(e.latest?.aromas || []), ...(e.details?.terpenes || [])].join(' ').toLowerCase().includes(q.toLowerCase()))));
   const filters = [['all', 'Alle'], ['grow', 'Eigener Grow'], ['pharmacy', 'Apotheke'], ['flower', 'Blüten'], ['extract', 'Extrakt'], ['shared', 'Geteilt'], ['rebuy', 'Merkliste']];
   function sub(e) {
     if (e.source === 'pharmacy') {
@@ -73,7 +73,7 @@
         {#each shown as e (e.id)}
           <a class="card" href="/entries/{e.id}" style="text-decoration:none;color:inherit">
             <div class="ph"><StrainImage name={e.strainName} photoId={e.coverPhotoId} /><span class="tag">{SOURCE[e.source]}{e.form === 'extract' ? ', Extrakt' : ''}</span>{#if e.shared}<span class="shared" title="Öffentlich geteilt"><Icon name="globe" size={15} /></span>{/if}</div>
-            <div class="meta"><div><h3>{e.strainName}</h3><small>{sub(e)}</small></div>{#if e.latest}<span class="score">{score(e.latest.overall)}</span>{/if}</div>
+            <div class="meta"><div><h3>{e.strainName}</h3><small>{[e.breeder, sub(e)].filter(Boolean).join(' · ')}</small></div>{#if e.latest}<span class="score">{score(e.latest.overall)}</span>{/if}</div>
           </a>
         {:else}<p class="muted">Keine Einträge in dieser Auswahl.</p>{/each}
       </div>

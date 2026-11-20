@@ -9,9 +9,13 @@
   const A = $derived(entries?.find(x => x.id === a)), B = $derived(entries?.find(x => x.id === b));
   const COLORS = ['var(--resin)', 'var(--leaf)'];
   const unit = e => e.form === 'extract' ? 'mg/ml' : '%';
+  // "Lemon Sorbet · Bathera": the same strain from two breeders can be compared
+  const label = e => e.breeder ? `${e.strainName} · ${e.breeder}` : e.strainName;
+  const breeder = e => e.breeder || (e.details.breederUnknown ? 'unbekannt' : '-');
   const rows = $derived(!A || !B ? [] : [
     ['Gesamtnote', score(A.latest.overall), score(B.latest.overall)],
     ...CATS.map(([k, n]) => [n, A.latest[k], B.latest[k]]),
+    ['Hersteller / Breeder', breeder(A), breeder(B)],
     ['Herkunft', SOURCE[A.source], SOURCE[B.source]], ['Form', FORM[A.form], FORM[B.form]], ['Genetik', genetics(A.genetics), genetics(B.genetics)],
     ['THC', A.details.thc ? `${A.details.thc} ${unit(A)}` : '-', B.details.thc ? `${B.details.thc} ${unit(B)}` : '-'],
     ['Preis', A.details.price ? `${String(A.details.price).replace('.', ',')} €` : '-', B.details.price ? `${String(B.details.price).replace('.', ',')} €` : '-'],
@@ -31,8 +35,8 @@
     {#each [[A, 'a'], [B, 'b']] as [E, key], i}
       <div class="col">
         <div class="field"><label for="c{key}">Sorte {i + 1}</label>
-          {#if key === 'a'}<select id="ca" bind:value={a}>{#each entries as e}<option value={e.id}>{e.strainName}</option>{/each}</select>
-          {:else}<select id="cb" bind:value={b}>{#each entries as e}<option value={e.id}>{e.strainName}</option>{/each}</select>{/if}
+          {#if key === 'a'}<select id="ca" bind:value={a}>{#each entries as e}<option value={e.id}>{label(e)}</option>{/each}</select>
+          {:else}<select id="cb" bind:value={b}>{#each entries as e}<option value={e.id}>{label(e)}</option>{/each}</select>{/if}
         </div>
         {#if E}<div class="ph"><StrainImage name={E.strainName} photoId={E.coverPhotoId} /></div>{/if}
       </div>
@@ -42,8 +46,8 @@
     <div class="compare-chart">
       <Radar series={[{ values: A.latest, color: COLORS[0] }, { values: B.latest, color: COLORS[1] }]} />
       <div>
-        <div class="legend"><span><i style="background:{COLORS[0]}"></i>{A.strainName}</span><span><i style="background:{COLORS[1]}"></i>{B.strainName}</span></div>
-        <div style="overflow-x:auto"><table class="ctable"><thead><tr><th></th><th>{A.strainName}</th><th>{B.strainName}</th></tr></thead>
+        <div class="legend"><span><i style="background:{COLORS[0]}"></i>{label(A)}</span><span><i style="background:{COLORS[1]}"></i>{label(B)}</span></div>
+        <div style="overflow-x:auto"><table class="ctable"><thead><tr><th></th><th>{A.strainName}{#if A.breeder}<span class="strain-sub">{A.breeder}</span>{/if}</th><th>{B.strainName}{#if B.breeder}<span class="strain-sub">{B.breeder}</span>{/if}</th></tr></thead>
           <tbody>{#each rows as [k, x, y]}<tr><th>{k}</th><td>{x}</td><td>{y}</td></tr>{/each}</tbody></table></div>
       </div>
     </div>

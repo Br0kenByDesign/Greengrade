@@ -39,7 +39,7 @@
     {/if}
     <div class="panel"><h2>Deine Noten nach Kategorie</h2><Bars items={CATS.map(([k, n]) => ({ label: n, value: s.categories[k] }))} /></div>
     <div class="panel"><h2>Bestenliste</h2>
-      <div class="timeline">{#each s.top as t, i}<a class="tl" style="grid-template-columns:28px 1fr auto;text-decoration:none;color:inherit" href="/entries/{t.entryId}"><time>{i + 1}.</time><span>{t.name}</span><span class="score">{score(t.overall)}</span></a>{/each}</div>
+      <div class="timeline">{#each s.top as t, i}<a class="tl" style="grid-template-columns:28px 1fr auto;text-decoration:none;color:inherit" href="/entries/{t.entryId}"><time>{i + 1}.</time><span>{t.name}{#if t.breeder}<span class="strain-sub">{t.breeder}</span>{/if}</span><span class="score">{score(t.overall)}</span></a>{/each}</div>
     </div>
     <div class="panel"><h2>Grow oder Apotheke?</h2>
       <div class="versus">

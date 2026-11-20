@@ -22,12 +22,15 @@
   const l = $derived(e?.latest);
   const d = $derived(e?.details || {});
   const unit = $derived(e?.form === 'extract' ? 'mg/ml' : '%');
-  const facts = $derived(!e ? [] : (e.source === 'pharmacy' ? [
-    ['Hersteller', d.manufacturer], ['Produkt', d.product], ['THC', d.thc && `${d.thc} ${unit}`], ['CBD', d.cbd && `${d.cbd} ${unit}`],
+  const bLabel = $derived(e?.source === 'pharmacy' ? 'Hersteller' : 'Breeder');
+  const bText = $derived(e?.breeder || (d.breederUnknown ? 'Breeder unbekannt' : ''));
+  const facts = $derived(!e ? [] : [[bLabel, bText]].concat(e.source === 'pharmacy' ? [
+    // "Hersteller (Notiz)": free text from before 1.5.0 that could not become a public name
+    ['Hersteller (Notiz)', d.manufacturer], ['Produkt', d.product], ['THC', d.thc && `${d.thc} ${unit}`], ['CBD', d.cbd && `${d.cbd} ${unit}`],
     ['Charge', d.batch], ['Bestrahlt', d.irradiated], ['Preis', d.price && `${String(d.price).replace('.', ',')} € / ${e.form === 'extract' ? 'ml' : 'g'}`],
     ['Abgabe', d.purchasedOn && date(d.purchasedOn)], ['Apotheke', d.pharmacy]
   ] : [
-    ['Saatgut', d.seedType], ['Breeder', d.breeder], ['Umgebung', d.environment], ['Medium', d.medium],
+    ['Saatgut', d.seedType], ['Breeder (Notiz)', d.breeder], ['Umgebung', d.environment], ['Medium', d.medium],
     ['Keimung', d.germinatedOn && date(d.germinatedOn)], ['Blütezeit', d.flowerDays && `${d.flowerDays} Tage`], ['Ernte', d.harvestedOn && date(d.harvestedOn)],
     ['Trocknung', d.dryDays && `${d.dryDays} Tage`], ['Curing', d.cureWeeks && `${d.cureWeeks} Wochen`], ['Licht', d.lightWatts && `${d.lightWatts} W`], ['Ertrag', d.yieldGrams && `${d.yieldGrams} g`]
   ]).concat([
@@ -75,7 +78,7 @@
     <div>
       <div class="dtitle">
         <div>
-          <h1>{e.strainName}</h1>
+          <h1>{e.strainName}{#if bText}<span class="strain-sub">{bText}</span>{/if}</h1>
           <div class="pills"><span class="pill leaf">{SOURCE[e.source]}</span><span class="pill">{FORM[e.form]}</span><span class="pill">{genetics(e.genetics)}</span>{#if e.rebuy}<span class="pill">Merkliste</span>{/if}{#each l?.daytime || [] as dt}<span class="pill">{dt}</span>{/each}</div>
         </div>
         {#if l}<Ring value={l.overall} />{/if}
@@ -83,7 +86,7 @@
       {#if facts.length}<div class="facts">{#each facts as [k, v]}<div><span>{k}</span><b>{v}</b></div>{/each}</div>{/if}
       {#if data.share}
         <div class="sharedbox">
-          <div><Icon name="globe" size={20} /><span><b style="font-weight:500">Öffentlich geteilt</b><br><span class="muted" style="font-size:13px">Noten{data.share.comment ? ', Kommentar' : ''}{data.share.photoId ? ' und ein Foto' : ''}{data.share.commentHidden || data.share.photoHidden ? ' - teilweise ausgeblendet' : ''}</span></span></div>
+          <div><Icon name="globe" size={20} /><span><b style="font-weight:500">Öffentlich geteilt</b><br><span class="muted" style="font-size:13px">{e.breeder ? e.breeder + ', ' : ''}Noten{data.share.comment ? ', Kommentar' : ''}{data.share.photoId ? ' und ein Foto' : ''}{data.share.commentHidden || data.share.photoHidden ? ' - teilweise ausgeblendet' : ''}</span></span></div>
           <span class="row-actions"><a class="btn btn-ghost" href="/public/{e.strainId}">Sortenseite ansehen</a><button class="btn btn-line" onclick={unshare}>Nicht mehr teilen</button></span>
         </div>
       {/if}

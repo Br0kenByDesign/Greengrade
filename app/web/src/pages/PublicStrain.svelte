@@ -37,7 +37,7 @@
     </div>
     <div>
       <div class="dtitle">
-        <div><h1>{s.name}</h1><p class="muted" style="margin-top:6px">{s.count} öffentliche Bewertung{s.count === 1 ? '' : 'en'}{s.since ? ` seit ${month(s.since)}` : ''} <button class="linkbtn" onclick={() => (report = { strainId: s.id, target: 'name' })}>Name melden</button></p></div>
+        <div><h1>{s.name}<span class="strain-sub">{s.breeder || 'ohne Angabe zu Hersteller oder Breeder'}</span></h1><p class="muted" style="margin-top:6px">{s.count} öffentliche Bewertung{s.count === 1 ? '' : 'en'}{s.since ? ` seit ${month(s.since)}` : ''} <button class="linkbtn" onclick={() => (report = { strainId: s.id, target: 'name' })}>Namen melden</button></p></div>
         <Ring value={s.avg} label="Ø von 10" />
       </div>
       {#if s.mine}<div class="mine"><span>Deine Bewertung: <b>{score(s.mine.overall)}</b></span><a class="btn btn-ghost" style="background:var(--bg)" href="/entries/{s.mine.entryId}">Zu deinem Eintrag</a></div>{/if}

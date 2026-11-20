@@ -5,26 +5,29 @@
   import { notify } from '../lib/toast.svelte.js';
   let tab = $state('reports'), status = $state('open'), reports = $state(null), strains = $state([]), q = $state(''), err = $state('');
   let notes = $state({}), mergeFrom = $state(null), pinFor = $state(null), pinPhotos = $state([]);
-  let bans = $state(null), log = $state(null);
+  let bans = $state(null), log = $state(null), breeders = $state([]), bq = $state(''), bMergeFrom = $state(null), renameFor = $state({});
+  const lbl = s => s.breeder ? `${s.name} · ${s.breeder}` : s.name;
+  const loadBreeders = () => api('/api/admin/breeders?q=' + encodeURIComponent(bq)).then(r => (breeders = r)).catch(e => (err = e.message));
   const loadBans = () => api('/api/admin/bans').then(r => (bans = r)).catch(e => (err = e.message));
   const loadLog = () => api('/api/admin/log').then(r => (log = r)).catch(e => (err = e.message));
-  function openTab(v) { tab = v; err = ''; if (v === 'bans') loadBans(); if (v === 'log') loadLog(); }
+  function openTab(v) { tab = v; err = ''; if (v === 'bans') loadBans(); if (v === 'log') loadLog(); if (v === 'breeders') loadBreeders(); }
   const ACTIONS = {
     hide_comment: 'Kommentar ausgeblendet', hide_photo: 'Foto ausgeblendet', share_ban: 'Teilen gesperrt', share_unban: 'Sperre aufgehoben',
     dismiss_comment: 'Meldung verworfen (Kommentar)', dismiss_photo: 'Meldung verworfen (Foto)', dismiss_name: 'Meldung verworfen (Name)',
-    rename_strain: 'Sorte umbenannt', merge_strain: 'Sorten zusammengeführt'
+    rename_strain: 'Sorte umbenannt', merge_strain: 'Sorten zusammengeführt',
+    rename_breeder: 'Hersteller/Breeder umbenannt', merge_breeder: 'Hersteller/Breeder zusammengeführt'
   };
-  const TARGET = { photo: 'Foto', comment: 'Kommentar', name: 'Sortenname' };
+  const TARGET = { photo: 'Foto', comment: 'Kommentar', name: 'Name' };
   const loadReports = () => api('/api/admin/reports?status=' + status).then(r => (reports = r)).catch(e => (err = e.message));
   const loadStrains = () => api('/api/admin/strains?q=' + encodeURIComponent(q)).then(r => (strains = r)).catch(e => (err = e.message));
   loadReports(); loadStrains();
   async function resolve(r, action) {
-    let name;
-    if (action === 'rename') { name = prompt('Neuer Name für die Sorte:', r.strainName); if (!name) return; }
+    let name, breeder;
+    if (action === 'rename') ({ name, breeder } = renameFor[r.id]);
     if (action === 'hide_ban' && !confirm('Inhalt ausblenden und das öffentliche Teilen für dieses Konto sperren? Alle öffentlichen Bewertungen des Kontos werden entfernt.')) return;
     try {
-      await api('/api/admin/reports/' + r.id, { method: 'POST', body: { action, note: notes[r.id] || '', name } });
-      notify({ hide: 'Ausgeblendet, die Person wurde informiert.', hide_ban: 'Ausgeblendet und Teilen gesperrt.', rename: 'Sorte umbenannt.', dismiss: 'Meldung verworfen.' }[action]);
+      await api('/api/admin/reports/' + r.id, { method: 'POST', body: { action, note: notes[r.id] || '', name, breeder } });
+      notify({ hide: 'Ausgeblendet, die Person wurde informiert.', hide_ban: 'Ausgeblendet und Teilen gesperrt.', rename: 'Name geändert.', dismiss: 'Meldung verworfen.' }[action]);
       loadReports();
     } catch (e) { err = e.message; }
   }
@@ -37,8 +40,16 @@
     try { await api('/api/admin/strains/' + s.id, { method: 'PATCH', body: { name: n } }); loadStrains(); } catch (e) { err = e.message; }
   }
   async function merge(into) {
-    if (!confirm(`„${mergeFrom.name}“ in „${into.name}“ zusammenführen? Alle Einträge und Bewertungen wandern mit.`)) return;
+    if (!confirm(`„${lbl(mergeFrom)}“ in „${lbl(into)}“ zusammenführen? Alle Einträge und Bewertungen wandern mit.`)) return;
     try { await api('/api/admin/strains/merge', { method: 'POST', body: { fromId: mergeFrom.id, intoId: into.id } }); mergeFrom = null; notify('Zusammengeführt.'); loadStrains(); } catch (e) { err = e.message; }
+  }
+  async function renameBreeder(b) {
+    const n = prompt('Neuer Name (gilt für alle Sorten dieses Herstellers bzw. Breeders). Gibt es den Namen schon, werden beide zusammengeführt:', b.name); if (!n) return;
+    try { await api('/api/admin/breeders/' + b.id, { method: 'PATCH', body: { name: n } }); notify('Umbenannt.'); loadBreeders(); } catch (e) { err = e.message; }
+  }
+  async function mergeBreeder(into) {
+    if (!confirm(`„${bMergeFrom.name}“ in „${into.name}“ zusammenführen? Gleichnamige Sorten beider werden dabei zu einer Sorte.`)) return;
+    try { await api('/api/admin/breeders/merge', { method: 'POST', body: { fromId: bMergeFrom.id, intoId: into.id } }); bMergeFrom = null; notify('Zusammengeführt.'); loadBreeders(); } catch (e) { err = e.message; }
   }
   async function openPin(s) { pinFor = s; pinPhotos = await api(`/api/admin/strains/${s.id}/photos`).catch(() => []); }
   async function pin(photoId) {
@@ -47,8 +58,8 @@
 </script>
 
 {#if !session.me.isAdmin}<p class="err">Kein Zugriff.</p>{:else}
-<div class="head"><div><h1>Moderation</h1><p class="muted">Meldungen prüfen, Sorten pflegen, Sperren verwalten. Konten erscheinen nur als anonyme Kennung.</p></div></div>
-<div class="tabs">{#each [['reports', 'Meldungen'], ['strains', 'Sorten'], ['bans', 'Sperren'], ['log', 'Protokoll']] as [v, l]}<button class="chip" class:on={tab === v} onclick={() => openTab(v)}>{l}</button>{/each}</div>
+<div class="head"><div><h1>Moderation</h1><p class="muted">Meldungen prüfen, Sorten und Hersteller pflegen, Sperren verwalten. Konten erscheinen nur als anonyme Kennung.</p></div></div>
+<div class="tabs">{#each [['reports', 'Meldungen'], ['strains', 'Sorten'], ['breeders', 'Hersteller / Breeder'], ['bans', 'Sperren'], ['log', 'Protokoll']] as [v, l]}<button class="chip" class:on={tab === v} onclick={() => openTab(v)}>{l}</button>{/each}</div>
 {#if err}<p class="err" style="margin-bottom:14px">{err}</p>{/if}
 
 {#if tab === 'reports'}
@@ -58,7 +69,7 @@
     {#each reports || [] as r (r.id)}
       <div class="admin-item">
         <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
-          <b>{TARGET[r.target]} {r.target === 'name' ? '' : 'zu '}{#if r.strainId}<a href="/public/{r.strainId}">{r.strainName}</a>{:else}{r.strainName}{/if}</b>
+          <b>{TARGET[r.target]} {r.target === 'name' ? '' : 'zu '}{#if r.strainId}<a href="/public/{r.strainId}">{r.currentName ? lbl({ name: r.currentName, breeder: r.currentBreeder }) : r.strainName}</a>{:else}{r.strainName}{/if}</b>
           <span class="muted" style="font-size:13px">{date(r.createdAt)}{r.openReports > 1 ? `, ${r.openReports} offene Meldungen` : ''}</span>
         </div>
         <div class="row-actions" style="align-items:center">
@@ -71,7 +82,15 @@
         {:else if r.target === 'photo'}{#if r.photoId}<div class="mini-img"><img src={photoURL(r.photoId)} alt="Gemeldetes Foto"></div>{:else}<p class="muted">(Foto nicht mehr vorhanden)</p>{/if}{/if}
         {#if status === 'open'}
           {#if r.target === 'name'}
-            <div class="row-actions"><button class="btn btn-danger" onclick={() => resolve(r, 'rename')}>Umbenennen</button><button class="btn btn-ghost" onclick={() => resolve(r, 'dismiss')}>Verwerfen</button></div>
+            {#if renameFor[r.id]}
+              <div class="fgrid">
+                <div class="field"><label for="rn{r.id}">Sortenname</label><input id="rn{r.id}" bind:value={renameFor[r.id].name} maxlength="80"></div>
+                <div class="field"><label for="rb{r.id}">Hersteller / Breeder <span class="muted" style="font-weight:400">(gilt für alle seine Sorten)</span></label><input id="rb{r.id}" bind:value={renameFor[r.id].breeder} maxlength="80" disabled={!r.currentBreeder} placeholder={r.currentBreeder ? '' : 'ohne Angabe'}></div>
+              </div>
+              <div class="row-actions"><button class="btn btn-danger" onclick={() => resolve(r, 'rename')}>Speichern</button><button class="btn btn-ghost" onclick={() => delete renameFor[r.id]}>Abbrechen</button></div>
+            {:else}
+              <div class="row-actions"><button class="btn btn-danger" onclick={() => (renameFor[r.id] = { name: r.currentName || '', breeder: r.currentBreeder || '' })}>Umbenennen</button><button class="btn btn-ghost" onclick={() => resolve(r, 'dismiss')}>Verwerfen</button></div>
+            {/if}
           {:else}
             <div class="field"><label for="n{r.id}">Begründung für die Person (optional)</label><input id="n{r.id}" bind:value={notes[r.id]} maxlength="300"></div>
             <div class="row-actions">
@@ -103,13 +122,27 @@
           {#if l.content}<br><span style="font-size:13px;white-space:pre-line">„{l.content}“</span>{/if}</span></div>
     {/each}
   </div>
+{:else if tab === 'breeders'}
+  <div class="toolbar"><label class="search"><input placeholder="Hersteller oder Breeder suchen" aria-label="Hersteller oder Breeder suchen" bind:value={bq} oninput={loadBreeders}></label></div>
+  <p class="muted" style="font-size:13px;margin:-6px 0 14px">Nur Namen, die mit öffentlichen Bewertungen oder offenen Meldungen verbunden sind. Umbenennen gilt für alle Sorten dieses Herstellers bzw. Breeders.</p>
+  {#if bMergeFrom}<div class="note warn" style="margin-bottom:14px"><span>Wähle, in wen <b>{bMergeFrom.name}</b> überführt werden soll. <button class="linkbtn" onclick={() => (bMergeFrom = null)}>Abbrechen</button></span></div>{/if}
+  <div class="timeline" style="max-width:860px">
+    {#each breeders as b (b.id)}
+      <div class="tl" style="grid-template-columns:1fr auto"><span><b style="font-weight:500">{b.name}</b><br><span class="muted" style="font-size:13px">{b.strains} Sorte{b.strains === 1 ? '' : 'n'}, {b.ratings} öffentliche Bewertung{b.ratings === 1 ? '' : 'en'}</span></span>
+        <span class="row-actions">
+          {#if bMergeFrom && bMergeFrom.id !== b.id}<button class="btn btn-primary" onclick={() => mergeBreeder(b)}>Hierhin</button>
+          {:else if !bMergeFrom}<button class="linkbtn" onclick={() => renameBreeder(b)}>Umbenennen</button><button class="linkbtn" onclick={() => (bMergeFrom = b)}>Zusammenführen</button>{/if}
+        </span>
+      </div>
+    {/each}
+  </div>
 {:else}
-  <div class="toolbar"><label class="search"><input placeholder="Sorte suchen" aria-label="Sorte suchen" bind:value={q} oninput={loadStrains}></label></div>
+  <div class="toolbar"><label class="search"><input placeholder="Sorte oder Breeder suchen" aria-label="Sorte oder Breeder suchen" bind:value={q} oninput={loadStrains}></label></div>
   <p class="muted" style="font-size:13px;margin:-6px 0 14px">Hier erscheinen nur Sorten mit öffentlichen Bewertungen oder offenen Meldungen. Namen, die nur in privaten Logbüchern stehen, bleiben privat.</p>
-  {#if mergeFrom}<div class="note warn" style="margin-bottom:14px"><span>Wähle die Ziel-Sorte, in die <b>{mergeFrom.name}</b> überführt werden soll. <button class="linkbtn" onclick={() => (mergeFrom = null)}>Abbrechen</button></span></div>{/if}
+  {#if mergeFrom}<div class="note warn" style="margin-bottom:14px"><span>Wähle die Ziel-Sorte, in die <b>{lbl(mergeFrom)}</b> überführt werden soll. <button class="linkbtn" onclick={() => (mergeFrom = null)}>Abbrechen</button></span></div>{/if}
   {#if pinFor}
     <div class="inline-form" style="margin-bottom:16px">
-      <b>Titelbild für {pinFor.name}</b>
+      <b>Titelbild für {lbl(pinFor)}</b>
       {#if !pinPhotos.length}<p class="muted">Für diese Sorte gibt es keine geteilten Fotos.</p>{/if}
       <div class="pickphotos">
         <button class="none" class:on={!pinFor.pinnedPhotoId} onclick={() => pin(null)}>Automatisch</button>
@@ -120,7 +153,7 @@
   {/if}
   <div class="timeline" style="max-width:860px">
     {#each strains as s (s.id)}
-      <div class="tl" style="grid-template-columns:1fr auto auto"><span><b style="font-weight:500">{s.name}</b><br><span class="muted" style="font-size:13px">{s.ratings} öffentliche Bewertungen</span></span>
+      <div class="tl" style="grid-template-columns:1fr auto auto"><span><b style="font-weight:500">{s.name}</b><br><span class="muted" style="font-size:13px">{s.breeder || 'ohne Angabe'}, {s.ratings} öffentliche Bewertungen</span></span>
         <span class="muted" style="font-size:13px">{s.pinnedPhotoId ? 'Titelbild gesetzt' : ''}</span>
         <span class="row-actions">
           {#if mergeFrom && mergeFrom.id !== s.id}<button class="btn btn-primary" onclick={() => merge(s)}>Hierhin</button>

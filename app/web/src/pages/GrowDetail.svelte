@@ -6,14 +6,15 @@
   import * as O from '../lib/options.js';
   import Icon from '../components/Icon.svelte';
   import StrainInput from '../components/StrainInput.svelte';
+  import BreederInput from '../components/BreederInput.svelte';
 
   let { params } = $props();
   const isNew = !params.id;
-  let g = $state({ name: '', strainName: '', location: '', seedType: '', environment: 'Indoor', medium: '', lightWatts: '', germinatedOn: today(), floweringOn: '', expectedFlowerDays: 63, harvestedOn: '', dryDays: '', cureWeeks: '', yieldGrams: '', notes: '' });
+  let g = $state({ name: '', strainName: '', breederName: '', location: '', seedType: '', environment: 'Indoor', medium: '', lightWatts: '', germinatedOn: today(), floweringOn: '', expectedFlowerDays: 63, harvestedOn: '', dryDays: '', cureWeeks: '', yieldGrams: '', notes: '' });
   let logs = $state([]), entries = $state([]), editing = $state(isNew), err = $state(''), busy = $state(false), loaded = $state(isNew);
   let log = $state({ loggedOn: today(), text: '' });
 
-  function fill(x) { g = Object.fromEntries(Object.entries({ ...x, strainName: x.strainName || '' }).map(([k, v]) => [k, v ?? ''])); }
+  function fill(x) { g = Object.fromEntries(Object.entries({ ...x, strainName: x.strainName || '', breederName: x.breeder || '' }).map(([k, v]) => [k, v ?? ''])); }
   if (!isNew) api('/api/grows/' + params.id).then(r => { fill(r.grow); logs = r.logs; entries = r.entries; loaded = true; }).catch(e => (err = e.message));
 
   const prog = $derived.by(() => {
@@ -29,7 +30,7 @@
     const body = { ...g };
     for (const k of ints) body[k] = parseNum(body[k]) == null ? null : Math.round(parseNum(body[k]));
     for (const k of ['germinatedOn', 'floweringOn', 'harvestedOn']) body[k] = body[k] || null;
-    for (const k of ['id', 'strainId', 'createdAt', 'updatedAt', 'entryCount', 'lastLogAt']) delete body[k];
+    for (const k of ['id', 'strainId', 'breeder', 'createdAt', 'updatedAt', 'entryCount', 'lastLogAt']) delete body[k];
     try {
       const r = await api(isNew ? '/api/grows' : '/api/grows/' + params.id, { method: isNew ? 'POST' : 'PUT', body });
       notify('Grow gespeichert.');
@@ -79,7 +80,8 @@
   {#if editing}
     <form class="form-wrap" onsubmit={save}>
       <div class="fgrid">
-        <div class="field full"><label for="strain">Sorte</label><StrainInput bind:value={g.strainName} /></div>
+        <div class="field"><label for="strain">Sorte</label><StrainInput bind:value={g.strainName} bind:breeder={g.breederName} /></div>
+        <div class="field"><label for="gbr">Breeder <span class="muted" style="font-weight:400">(optional)</span></label><BreederInput id="gbr" bind:value={g.breederName} placeholder="z. B. Barney's Farm" /></div>
         <div class="field"><label for="n">Name <span class="muted" style="font-weight:400">(optional)</span></label><input id="n" bind:value={g.name} maxlength="80" placeholder="z. B. Blue Dream, Zelt 2"></div>
         <div class="field"><label for="loc">Ort</label><input id="loc" bind:value={g.location} maxlength="60" placeholder="z. B. Zelt 2"></div>
         <div class="field"><label for="s">Saatgut</label><select id="s" bind:value={g.seedType}><option value=""></option>{#each O.SEEDS as o}<option>{o}</option>{/each}</select></div>
@@ -102,7 +104,7 @@
     </form>
   {:else}
     <div class="facts" style="max-width:640px">
-      {#each [['Sorte', g.strainName], ['Saatgut', g.seedType], ['Umgebung', g.environment], ['Medium', g.medium], ['Licht', g.lightWatts && `${g.lightWatts} W`], ['Keimung', g.germinatedOn && date(g.germinatedOn)], ['Blüte seit', g.floweringOn && date(g.floweringOn)], ['Ernte', g.harvestedOn && date(g.harvestedOn)], ['Trocknung', g.dryDays && `${g.dryDays} Tage`], ['Curing', g.cureWeeks && `${g.cureWeeks} Wochen`], ['Ertrag', g.yieldGrams && `${g.yieldGrams} g`]].filter(x => x[1]) as [k, v]}<div><span>{k}</span><b>{v}</b></div>{/each}
+      {#each [['Sorte', g.strainName], ['Breeder', g.breeder], ['Saatgut', g.seedType], ['Umgebung', g.environment], ['Medium', g.medium], ['Licht', g.lightWatts && `${g.lightWatts} W`], ['Keimung', g.germinatedOn && date(g.germinatedOn)], ['Blüte seit', g.floweringOn && date(g.floweringOn)], ['Ernte', g.harvestedOn && date(g.harvestedOn)], ['Trocknung', g.dryDays && `${g.dryDays} Tage`], ['Curing', g.cureWeeks && `${g.cureWeeks} Wochen`], ['Ertrag', g.yieldGrams && `${g.yieldGrams} g`]].filter(x => x[1]) as [k, v]}<div><span>{k}</span><b>{v}</b></div>{/each}
     </div>
     {#if g.notes}<p class="notes" style="white-space:pre-line">{g.notes}</p>{/if}
 
